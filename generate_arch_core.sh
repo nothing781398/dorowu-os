@@ -10,8 +10,7 @@ trap 'echo "[-] Error on line ${LINENO}: command \"${BASH_COMMAND}\" failed with
 
 echo "==> Initializing Dorowu OS generation..."
 
-# Clean up any residual web template files if running inside a converted repo
-rm -f index.html index.htmlhtml index.HTML
+# Keep web portal files intact
 
 PROJECT_DIR="$(pwd)"
 PROFILE_DIR="${PROJECT_DIR}/dorowu-profile"
@@ -117,6 +116,9 @@ linux-headers
 intel-ucode
 amd-ucode
 mkinitcpio-archiso
+archlinux-keyring
+sudo
+which
 grub
 efibootmgr
 os-prober
@@ -418,13 +420,17 @@ ln -sf /usr/share/zoneinfo/UTC "${AIROOTFS}/etc/localtime"
 cat <<'EOF_SDDM' > "${AIROOTFS}/etc/sddm.conf.d/autologin.conf"
 [Autologin]
 User=dorowu
-Session=plasmawayland
+Session=plasma
 
 [Theme]
 Current=breeze
 CursorTheme=breeze_cursors
 CursorSize=24
 EOF_SDDM
+
+# Wayland session compatibility for Plasma 6
+mkdir -p "${AIROOTFS}/usr/share/wayland-sessions"
+ln -sf plasma.desktop "${AIROOTFS}/usr/share/wayland-sessions/plasmawayland.desktop"
 
 # Default Black Cursor configuration (Breeze Black Cursor)
 cat <<'EOF_CURSOR_SKEL' > "${AIROOTFS}/etc/skel/.icons/default/index.theme"
@@ -445,6 +451,7 @@ echo "==> Configuring systemd service symlinks..."
 ln -sf /usr/lib/systemd/system/NetworkManager.service "${AIROOTFS}/etc/systemd/system/multi-user.target.wants/NetworkManager.service"
 ln -sf /usr/lib/systemd/system/bluetooth.service "${AIROOTFS}/etc/systemd/system/multi-user.target.wants/bluetooth.service"
 ln -sf /usr/lib/systemd/system/systemd-timesyncd.service "${AIROOTFS}/etc/systemd/system/sysinit.target.wants/systemd-timesyncd.service"
+ln -sf /usr/lib/systemd/system/graphical.target "${AIROOTFS}/etc/systemd/system/default.target"
 ln -sf /usr/lib/systemd/system/sddm.service "${AIROOTFS}/etc/systemd/system/display-manager.service"
 
 cat <<'EOF_FLATHUB' > "${AIROOTFS}/usr/lib/systemd/system/dorowu-flathub.service"
@@ -457,7 +464,7 @@ ConditionPathExists=!/var/lib/flatpak/repo/flathub.ready
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/bin/sh -c 'flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true; touch /var/lib/flatpak/repo/flathub.ready'
+ExecStart=/bin/sh -c 'mkdir -p /var/lib/flatpak/repo && flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true; touch /var/lib/flatpak/repo/flathub.ready'
 
 [Install]
 WantedBy=multi-user.target
@@ -624,18 +631,19 @@ CONFIG_FILE="${CONFIG_DIR}/ai-assistant.conf"
 
 PROVIDER="gemini"
 MODEL="gemini-2.5-flash"
-API_KEY="${GEMINI_API_KEY:-}"
+DEFAULT_KEY="AQ.Ab8RN6JngjqaiZjgdaDbezb_iVdIpP8qUtnf1NO6MQHUgp596Q"
+API_KEY="${GEMINI_API_KEY:-${DEFAULT_KEY}}"
 OPENAI_BASE_URL="https://api.openai.com/v1"
-SYSTEM_PROMPT="You are the Dorowu OS Terminal AI Assistant, an expert Linux and software development companion built into Dorowu OS. Provide clear, concise, actionable terminal commands and explanations."
+SYSTEM_PROMPT="You are the Dorowu OS Terminal AI Assistant. When asked who you are (such as 'who are u', 'who are you', 'who are u?'), you must always explicitly state: \"I'm an AI assistant of Dorowu OS\". You are an expert Linux, Arch Linux, and software development companion built into Dorowu OS. Provide clear, concise, actionable terminal commands and explanations."
 
 load_config() {
     if [[ -f "${CONFIG_FILE}" ]]; then
         # shellcheck source=/dev/null
         source "${CONFIG_FILE}"
     fi
-    if [[ "${PROVIDER}" == "gemini" && -z "${API_KEY}" ]]; then
-        API_KEY="${GEMINI_API_KEY:-}"
-    elif [[ "${PROVIDER}" == "openai" && -z "${API_KEY}" ]]; then
+    if [[ "${PROVIDER}" == "gemini" && -z "${API_KEY:-}" ]]; then
+        API_KEY="${GEMINI_API_KEY:-${DEFAULT_KEY}}"
+    elif [[ "${PROVIDER}" == "openai" && -z "${API_KEY:-}" ]]; then
         API_KEY="${OPENAI_API_KEY:-}"
     fi
 }
@@ -645,7 +653,8 @@ print_help() {
 Dorowu OS Terminal AI Assistant
 Usage:
   ai-assistant [options] [prompt]
-  cat error.log | ai-assistant "how do I fix this?"
+  ai "who are u"
+  cat error.log | ai "how do I fix this?"
 
 Options:
   -h, --help            Show this help documentation
@@ -655,7 +664,7 @@ Options:
   -r, --reset           Reset local conversation history
 
 Environment:
-  GEMINI_API_KEY        API key for Google Gemini
+  GEMINI_API_KEY        API key for Google Gemini (pre-configured by default)
   OPENAI_API_KEY        API key for OpenAI-compatible endpoints
 HLP
 }
@@ -682,8 +691,9 @@ CFG
     else
         read -r -p "Gemini Model (default: gemini-2.5-flash): " chosen_mod
         chosen_mod="${chosen_mod:-gemini-2.5-flash}"
-        read -r -s -p "Gemini API Key: " chosen_key
+        read -r -s -p "Gemini API Key (press Enter to keep default): " chosen_key
         echo ""
+        chosen_key="${chosen_key:-${DEFAULT_KEY}}"
         cat > "${CONFIG_FILE}" <<CFG
 PROVIDER="gemini"
 MODEL="${chosen_mod}"
@@ -696,33 +706,85 @@ CFG
 }
 
 check_credentials() {
-    if [[ -z "${API_KEY}" ]]; then
-        echo -e "\033[01;31mError: No API key found for provider '${PROVIDER}'.\033[00m" >&2
-        echo "" >&2
-        echo "To get started, provide your API key via:" >&2
+    if [[ -z "${API_KEY:-}" ]]; then
         if [[ "${PROVIDER}" == "gemini" ]]; then
-            echo "  export GEMINI_API_KEY='your_gemini_api_key'" >&2
-            echo "  or run: ai-assistant --config" >&2
+            API_KEY="${DEFAULT_KEY}"
         else
-            echo "  export OPENAI_API_KEY='your_api_key'" >&2
-            echo "  or run: ai-assistant --config" >&2
+            echo -e "\033[01;31mError: No API key found for provider '${PROVIDER}'.\033[00m" >&2
+            echo "Run 'ai-assistant --config' to set your OpenAI credentials." >&2
+            exit 1
         fi
-        exit 1
+    fi
+}
+
+is_identity_query() {
+    local q
+    q=$(echo "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:punct:]' | xargs)
+    if [[ "$q" == "who are u"* || "$q" == "who are you"* || "$q" == "who r u"* || "$q" == "what are you"* || "$q" == "who u"* ]]; then
+        return 0
+    fi
+    return 1
+}
+
+json_quote() {
+    local raw="$1"
+    if command -v jq &>/dev/null; then
+        jq -Rs . <<< "${raw}"
+    elif command -v python3 &>/dev/null; then
+        python3 -c "import sys, json; print(json.dumps(sys.stdin.read()))" <<< "${raw}"
+    elif command -v python &>/dev/null; then
+        python -c "import sys, json; print(json.dumps(sys.stdin.read()))" <<< "${raw}"
+    elif command -v node &>/dev/null; then
+        node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>process.stdout.write(JSON.stringify(d)))' <<< "${raw}"
+    else
+        echo -n "\"${raw//\"/\\\"}\""
+    fi
+}
+
+parse_gemini_response() {
+    local tmp_file="$1"
+    if command -v jq &>/dev/null; then
+        jq -r '.candidates[0].content.parts[0].text // empty' "${tmp_file}" 2>/dev/null || true
+    elif command -v python3 &>/dev/null; then
+        python3 -c "
+import json
+try:
+    with open('${tmp_file}') as f:
+        data = json.load(f)
+    print(data['candidates'][0]['content']['parts'][0]['text'])
+except Exception:
+    pass
+" 2>/dev/null || true
+    fi
+}
+
+parse_openai_response() {
+    local tmp_file="$1"
+    if command -v jq &>/dev/null; then
+        jq -r '.choices[0].message.content // empty' "${tmp_file}" 2>/dev/null || true
+    elif command -v python3 &>/dev/null; then
+        python3 -c "
+import json
+try:
+    with open('${tmp_file}') as f:
+        data = json.load(f)
+    print(data['choices'][0]['message']['content'])
+except Exception:
+    pass
+" 2>/dev/null || true
     fi
 }
 
 call_gemini() {
-    local contents_json="$1"
+    local prompt_text="$1"
     local url="https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}"
+    local quoted_prompt
+    quoted_prompt=$(json_quote "${prompt_text}")
+    local quoted_sys
+    quoted_sys=$(json_quote "${SYSTEM_PROMPT}")
+
     local payload
-    payload=$(jq -n \
-        --arg sys "${SYSTEM_PROMPT}" \
-        --argjson contents "${contents_json}" \
-        '{
-            systemInstruction: { parts: [{ text: $sys }] },
-            contents: $contents,
-            generationConfig: { temperature: 0.7 }
-        }')
+    payload="{\"systemInstruction\":{\"parts\":[{\"text\":${quoted_sys}}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":${quoted_prompt}}]}],\"generationConfig\":{\"temperature\":0.7}}"
 
     local tmp_out
     tmp_out=$(mktemp)
@@ -739,15 +801,14 @@ call_gemini() {
     fi
 
     if [[ "${http_code}" -ne 200 ]]; then
-        local err_msg
-        err_msg=$(jq -r '.error.message // "Unknown error"' "${tmp_out}" 2>/dev/null || cat "${tmp_out}")
-        echo "API Error (${http_code}): ${err_msg}" >&2
+        echo "API Error (${http_code}):" >&2
+        cat "${tmp_out}" >&2
         rm -f "${tmp_out}"
         return 1
     fi
 
     local text_res
-    text_res=$(jq -r '.candidates[0].content.parts[0].text // empty' "${tmp_out}" 2>/dev/null)
+    text_res=$(parse_gemini_response "${tmp_out}")
     rm -f "${tmp_out}"
 
     if [[ -z "${text_res}" ]]; then
@@ -759,17 +820,15 @@ call_gemini() {
 }
 
 call_openai() {
-    local messages_json="$1"
+    local prompt_text="$1"
     local url="${OPENAI_BASE_URL}/chat/completions"
+    local quoted_prompt
+    quoted_prompt=$(json_quote "${prompt_text}")
+    local quoted_sys
+    quoted_sys=$(json_quote "${SYSTEM_PROMPT}")
+
     local payload
-    payload=$(jq -n \
-        --arg model "${MODEL}" \
-        --arg sys "${SYSTEM_PROMPT}" \
-        --argjson msgs "${messages_json}" \
-        '{
-            model: $model,
-            messages: ([{ role: "system", content: $sys }] + $msgs)
-        }')
+    payload="{\"model\":\"${MODEL}\",\"messages\":[{\"role\":\"system\",\"content\":${quoted_sys}},{\"role\":\"user\",\"content\":${quoted_prompt}}]}"
 
     local tmp_out
     tmp_out=$(mktemp)
@@ -787,15 +846,14 @@ call_openai() {
     fi
 
     if [[ "${http_code}" -ne 200 ]]; then
-        local err_msg
-        err_msg=$(jq -r '.error.message // "Unknown error"' "${tmp_out}" 2>/dev/null || cat "${tmp_out}")
-        echo "API Error (${http_code}): ${err_msg}" >&2
+        echo "API Error (${http_code}):" >&2
+        cat "${tmp_out}" >&2
         rm -f "${tmp_out}"
         return 1
     fi
 
     local text_res
-    text_res=$(jq -r '.choices[0].message.content // empty' "${tmp_out}" 2>/dev/null)
+    text_res=$(parse_openai_response "${tmp_out}")
     rm -f "${tmp_out}"
 
     if [[ -z "${text_res}" ]]; then
@@ -837,7 +895,7 @@ check_credentials
 
 # Handle piped input
 STDIN_INPUT=""
-if [[ ! -t 0 ]]; then
+if [[ ! -t 0 ]] && read -t 0; then
     STDIN_INPUT=$(cat)
 fi
 
@@ -851,22 +909,24 @@ if [[ -n "${STDIN_INPUT}" || ${#PROMPT_ARGS[@]} -gt 0 ]]; then
         fi
     fi
 
+    if is_identity_query "${FULL_QUERY}"; then
+        echo "I'm an AI assistant of Dorowu OS, an expert Linux and software development companion built into Dorowu OS. How can I help you today?"
+        exit 0
+    fi
+
     if [[ "${PROVIDER}" == "gemini" ]]; then
-        CONTENTS=$(jq -n --arg q "${FULL_QUERY}" '[{ role: "user", parts: [{ text: $q }] }]')
-        call_gemini "${CONTENTS}"
+        call_gemini "${FULL_QUERY}"
     else
-        MSGS=$(jq -n --arg q "${FULL_QUERY}" '[{ role: "user", content: $q }]')
-        call_openai "${MSGS}"
+        call_openai "${FULL_QUERY}"
     fi
     exit 0
 fi
 
 # Interactive REPL session
 echo -e "\033[01;36mDorowu OS AI Terminal Assistant [Model: ${MODEL}]\033[00m"
+echo -e "Pre-configured with official Dorowu OS AI intelligence."
 echo "Type your message or 'exit' / 'quit' to end session."
 echo ""
-
-SESSION_HISTORY="[]"
 
 while true; do
     read -r -e -p "dorowu-ai> " user_input || break
@@ -875,16 +935,17 @@ while true; do
         break
     fi
 
+    if is_identity_query "${user_input}"; then
+        echo -e "\nI'm an AI assistant of Dorowu OS, an expert Linux and software development companion built into Dorowu OS. How can I help you today?\n"
+        continue
+    fi
+
     if [[ "${PROVIDER}" == "gemini" ]]; then
-        SESSION_HISTORY=$(jq --arg q "${user_input}" '. + [{ role: "user", parts: [{ text: $q }] }]' <<< "${SESSION_HISTORY}")
-        reply=$(call_gemini "${SESSION_HISTORY}") || continue
+        reply=$(call_gemini "${user_input}") || continue
         echo -e "\n${reply}\n"
-        SESSION_HISTORY=$(jq --arg a "${reply}" '. + [{ role: "model", parts: [{ text: $a }] }]' <<< "${SESSION_HISTORY}")
     else
-        SESSION_HISTORY=$(jq --arg q "${user_input}" '. + [{ role: "user", content: $q }]' <<< "${SESSION_HISTORY}")
-        reply=$(call_openai "${SESSION_HISTORY}") || continue
+        reply=$(call_openai "${user_input}") || continue
         echo -e "\n${reply}\n"
-        SESSION_HISTORY=$(jq --arg a "${reply}" '. + [{ role: "assistant", content: $a }]' <<< "${SESSION_HISTORY}")
     fi
 done
 EOF_AI_ASSISTANT
@@ -1005,9 +1066,17 @@ sequence:
       - partition
       - mount
       - unpackfs
-      - initcpio
+      - machineid
+      - fstab
+      - locale
+      - keyboard
+      - localecfg
+      - users
       - displaymanager
+      - networkcfg
+      - hwclock
       - services-systemd
+      - initcpio
       - bootloader
       - shellprocess@cleanup
       - umount
@@ -1023,6 +1092,36 @@ disable-cancel-during-exec: false
 hide-back-and-next-during-exec: false
 quit-at-end: false
 EOF_CAL_SETTINGS
+
+cat <<'EOF_CAL_FSTAB' > "${AIROOTFS}/etc/calamares/modules/fstab.conf"
+---
+mountOptions:
+    default: defaults,noatime
+    btrfs: defaults,noatime,compress=zstd
+    ext4: defaults,noatime
+ssdExtraMountOptions:
+    ext4: discard
+    btrfs: discard=async
+EOF_CAL_FSTAB
+
+cat <<'EOF_CAL_MACHINEID' > "${AIROOTFS}/etc/calamares/modules/machineid.conf"
+---
+systemd: true
+dbus: true
+symlink: true
+EOF_CAL_MACHINEID
+
+cat <<'EOF_CAL_LOCALECFG' > "${AIROOTFS}/etc/calamares/modules/localecfg.conf"
+---
+EOF_CAL_LOCALECFG
+
+cat <<'EOF_CAL_NETWORKCFG' > "${AIROOTFS}/etc/calamares/modules/networkcfg.conf"
+---
+EOF_CAL_NETWORKCFG
+
+cat <<'EOF_CAL_HWCLOCK' > "${AIROOTFS}/etc/calamares/modules/hwclock.conf"
+---
+EOF_CAL_HWCLOCK
 
 cat <<'EOF_CAL_WELCOME' > "${AIROOTFS}/etc/calamares/modules/welcome.conf"
 ---
@@ -1061,7 +1160,8 @@ EOF_CAL_KEYBOARD
 
 cat <<'EOF_CAL_PARTITION' > "${AIROOTFS}/etc/calamares/modules/partition.conf"
 ---
-efiSystemPartition: "/boot"
+efiSystemPartition: "/boot/efi"
+efiSystemPartitionSize: 512M
 userSwapChoices:
     - none
     - small
@@ -1134,7 +1234,7 @@ displaymanagers:
   - sddm
 defaultDesktopEnvironment:
     executable: "startplasma-wayland"
-    desktopFile: "plasmawayland"
+    desktopFile: "plasma"
 basicSetup: false
 EOF_CAL_DM
 
@@ -1493,8 +1593,8 @@ echo "==> Build complete! Output ISO(s):"
 ls -lh out/*.iso
 EOF_CI_BUILD
 
-echo "==> Generating GitHub Actions workflow: .github/workflows/build-iso.yml..."
-cat <<'EOF_WORKFLOW' > "${WORKFLOW_DIR}/build-iso.yml"
+echo "==> Generating GitHub Actions workflows: build-x86_64.yml and build-iso.yml..."
+cat <<'EOF_WORKFLOW' > "${WORKFLOW_DIR}/build-x86_64.yml"
 name: Build Dorowu OS ISO (x86_64)
 
 on:
@@ -1559,6 +1659,9 @@ jobs:
             out/SHA256SUMS
 EOF_WORKFLOW
 
+cp "${WORKFLOW_DIR}/build-x86_64.yml" "${WORKFLOW_DIR}/build-iso.yml"
+cp "${WORKFLOW_DIR}/build-x86_64.yml" "${WORKFLOW_DIR}/main.yml"
+
 echo "==> Setting executable permissions on scripts..."
 chmod +x "${PROJECT_DIR}/build-local-repo.sh" \
          "${SCRIPTS_DIR}/ci-build.sh" \
@@ -1585,6 +1688,8 @@ CHECK_FILES=(
   "${AIROOTFS}/etc/gshadow"
   "${AIROOTFS}/etc/sudoers.d/99-dorowu-live"
   "${AIROOTFS}/etc/calamares/settings.conf"
+  "${AIROOTFS}/etc/calamares/modules/fstab.conf"
+  "${AIROOTFS}/etc/calamares/modules/machineid.conf"
   "${AIROOTFS}/etc/calamares/branding/dorowu/branding.desc"
   "${AIROOTFS}/etc/calamares/branding/dorowu/show.qml"
   "${AIROOTFS}/etc/skel/.config/kitty/kitty.conf"
@@ -1602,6 +1707,7 @@ CHECK_FILES=(
   "${PROJECT_DIR}/build-local-repo.sh"
   "${SCRIPTS_DIR}/ci-build.sh"
   "${SCRIPTS_DIR}/generate-assets.sh"
+  "${WORKFLOW_DIR}/build-x86_64.yml"
   "${WORKFLOW_DIR}/build-iso.yml"
 )
 

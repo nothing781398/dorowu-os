@@ -7,6 +7,9 @@ linux-headers
 intel-ucode
 amd-ucode
 mkinitcpio-archiso
+archlinux-keyring
+sudo
+which
 grub
 efibootmgr
 os-prober
