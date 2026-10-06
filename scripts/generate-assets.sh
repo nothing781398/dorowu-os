@@ -50,3 +50,12 @@ if command -v magick &>/dev/null; then
         \( "${DEST_PIXMAPS}/dorowu-logo.svg" -resize 300x300 \) -gravity center -composite \
         "${DEST_BG}/default.png" || true
 fi
+
+# 4. Install Secondary & Backup Alpine Mountain Wallpaper
+if [[ -f "dorowu-profile/airootfs/usr/share/backgrounds/dorowu/mountain-backup.jpg" ]]; then
+    cp "dorowu-profile/airootfs/usr/share/backgrounds/dorowu/mountain-backup.jpg" "${DEST_BG}/mountain-backup.jpg" || true
+    cp "dorowu-profile/airootfs/usr/share/backgrounds/dorowu/mountain-backup.jpg" "${DEST_BG}/secondary.jpg" || true
+elif ls src/assets/images/mountain_wallpaper_*.jpg &>/dev/null; then
+    cp src/assets/images/mountain_wallpaper_*.jpg "${DEST_BG}/mountain-backup.jpg" || true
+    cp src/assets/images/mountain_wallpaper_*.jpg "${DEST_BG}/secondary.jpg" || true
+fi

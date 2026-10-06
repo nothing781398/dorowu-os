@@ -1028,7 +1028,15 @@ echo "==> Creating wallpaper script and autostart..."
 cat <<'EOF_WP_SCRIPT' > "${AIROOTFS}/usr/local/bin/dorowu-set-wallpaper"
 #!/usr/bin/env bash
 set -euo pipefail
-WP="/usr/share/backgrounds/dorowu/default.png"
+WP="${1:-/usr/share/backgrounds/dorowu/default.png}"
+if [[ ! -f "${WP}" ]]; then
+    if [[ -f "/usr/share/backgrounds/dorowu/secondary.jpg" ]]; then
+        WP="/usr/share/backgrounds/dorowu/secondary.jpg"
+    elif [[ -f "/usr/share/backgrounds/dorowu/mountain-backup.jpg" ]]; then
+        WP="/usr/share/backgrounds/dorowu/mountain-backup.jpg"
+    fi
+fi
+
 if [[ -f "${WP}" ]] && command -v plasma-apply-wallpaperimage &>/dev/null; then
     plasma-apply-wallpaperimage "${WP}" || true
 fi
@@ -1545,6 +1553,15 @@ if command -v magick &>/dev/null; then
         \( "${DEST_PIXMAPS}/dorowu-logo.svg" -resize 300x300 \) -gravity center -composite \
         "${DEST_BG}/default.png" || true
 fi
+
+# 4. Install Secondary & Backup Alpine Mountain Wallpaper
+if [[ -f "dorowu-profile/airootfs/usr/share/backgrounds/dorowu/mountain-backup.jpg" ]]; then
+    cp "dorowu-profile/airootfs/usr/share/backgrounds/dorowu/mountain-backup.jpg" "${DEST_BG}/mountain-backup.jpg" || true
+    cp "dorowu-profile/airootfs/usr/share/backgrounds/dorowu/mountain-backup.jpg" "${DEST_BG}/secondary.jpg" || true
+elif ls src/assets/images/mountain_wallpaper_*.jpg &>/dev/null; then
+    cp src/assets/images/mountain_wallpaper_*.jpg "${DEST_BG}/mountain-backup.jpg" || true
+    cp src/assets/images/mountain_wallpaper_*.jpg "${DEST_BG}/secondary.jpg" || true
+fi
 EOF_ASSETS_SH
 
 echo "==> Generating CI build script: scripts/ci-build.sh..."
@@ -1593,7 +1610,7 @@ echo "==> Build complete! Output ISO(s):"
 ls -lh out/*.iso
 EOF_CI_BUILD
 
-echo "==> Generating GitHub Actions workflows: build-x86_64.yml and build-iso.yml..."
+echo "==> Generating GitHub Actions workflow: .github/workflows/build-x86_64.yml..."
 cat <<'EOF_WORKFLOW' > "${WORKFLOW_DIR}/build-x86_64.yml"
 name: Build Dorowu OS ISO (x86_64)
 
@@ -1659,9 +1676,6 @@ jobs:
             out/SHA256SUMS
 EOF_WORKFLOW
 
-cp "${WORKFLOW_DIR}/build-x86_64.yml" "${WORKFLOW_DIR}/build-iso.yml"
-cp "${WORKFLOW_DIR}/build-x86_64.yml" "${WORKFLOW_DIR}/main.yml"
-
 echo "==> Setting executable permissions on scripts..."
 chmod +x "${PROJECT_DIR}/build-local-repo.sh" \
          "${SCRIPTS_DIR}/ci-build.sh" \
@@ -1708,7 +1722,6 @@ CHECK_FILES=(
   "${SCRIPTS_DIR}/ci-build.sh"
   "${SCRIPTS_DIR}/generate-assets.sh"
   "${WORKFLOW_DIR}/build-x86_64.yml"
-  "${WORKFLOW_DIR}/build-iso.yml"
 )
 
 for file in "${CHECK_FILES[@]}"; do

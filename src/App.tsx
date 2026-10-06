@@ -720,6 +720,9 @@ jobs:
                 <p>
                   All configs, desktop files, plymouth boots, SDDM themes, hostname, Calamares branding, and shell aliases strictly use <strong>Dorowu OS</strong>.
                 </p>
+                <p className="text-slate-400">
+                  <code className="text-teal-300">index.HTML</code> and web bundle artifacts are formally excluded in <code className="text-teal-300">.gitignore</code>.
+                </p>
               </div>
 
               {/* Vector Logo Preview */}
@@ -736,6 +739,36 @@ jobs:
                   <p className="text-xs text-slate-400 mt-1">
                     Vector squircle with royal blue-teal gradient, white 'D', and ice-blue mountain silhouette at <code className="text-teal-300">dorowu-profile/airootfs/usr/share/pixmaps/dorowu-logo.svg</code>.
                   </p>
+                </div>
+              </div>
+
+              {/* Secondary & Backup Alpine Mountain Wallpaper Card */}
+              <div className="p-5 rounded-lg bg-slate-950 border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-white text-sm flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-400" />
+                      Secondary & Backup Alpine Mountain Wallpaper
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Installed at <code className="text-teal-300">/usr/share/backgrounds/dorowu/secondary.jpg</code> and <code className="text-teal-300">mountain-backup.jpg</code>.
+                    </p>
+                  </div>
+                  <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-teal-500/10 text-teal-300 border border-teal-500/20 font-medium">
+                    Integrated Backup
+                  </span>
+                </div>
+                <div className="relative rounded-lg overflow-hidden border border-slate-800 aspect-video max-h-56 bg-slate-900 group">
+                  <img
+                    src="/wallpapers/secondary.jpg"
+                    alt="Dorowu OS Secondary Alpine Mountain Wallpaper"
+                    className="w-full h-full object-cover group-hover:scale-102 transition duration-500"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex items-end p-3">
+                    <span className="text-xs font-medium text-slate-200">
+                      Alpine Peaks & Autumn Pine Forest — Included in live & target desktop
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

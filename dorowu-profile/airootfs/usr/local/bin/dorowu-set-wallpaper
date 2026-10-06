@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
-WP="/usr/share/backgrounds/dorowu/default.png"
+WP="${1:-/usr/share/backgrounds/dorowu/default.png}"
+if [[ ! -f "${WP}" ]]; then
+    if [[ -f "/usr/share/backgrounds/dorowu/secondary.jpg" ]]; then
+        WP="/usr/share/backgrounds/dorowu/secondary.jpg"
+    elif [[ -f "/usr/share/backgrounds/dorowu/mountain-backup.jpg" ]]; then
+        WP="/usr/share/backgrounds/dorowu/mountain-backup.jpg"
+    fi
+fi
+
 if [[ -f "${WP}" ]] && command -v plasma-apply-wallpaperimage &>/dev/null; then
     plasma-apply-wallpaperimage "${WP}" || true
 fi
