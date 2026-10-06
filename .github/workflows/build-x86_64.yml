@@ -1,12 +1,12 @@
 name: Build Dorowu OS ISO (x86_64)
 
 on:
-  workflow_dispatch:        # start it from the GitHub mobile app
   push:
-    tags: ['v*']            # tag v1.0 -> build + attach ISO to a Release
+    branches: [ main ]      # Forces GitHub to scan and recognize this file right now
+  workflow_dispatch:        # Allows manual trigger from the website or mobile app
 
 permissions:
-  contents: write           # needed to attach the ISO to a Release
+  contents: write           # Needed to attach the ISO to a Release
 
 concurrency:
   group: build-iso
@@ -27,7 +27,6 @@ jobs:
           df -h /
 
       # The whole build runs inside a privileged Arch Linux container.
-      # (A docker step is used instead of "container:" so the disk cleanup above works on the host.)
       - name: Build ISO (archiso inside archlinux container)
         run: |
           mkdir -p out
@@ -60,3 +59,4 @@ jobs:
           files: |
             out/*.iso
             out/SHA256SUMS
+            
