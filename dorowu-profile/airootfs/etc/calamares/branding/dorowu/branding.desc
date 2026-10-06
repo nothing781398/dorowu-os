@@ -1,0 +1,34 @@
+---
+componentName:  dorowu
+welcomeStyleCalamares:   false
+welcomeExpandingLogo:   true
+windowExpanding:    normal
+windowSize: 850px,560px
+windowPlacement: center
+
+strings:
+    productName:         Dorowu OS
+    shortProductName:    Dorowu
+    version:             "2026.10"
+    shortVersion:        "2026.10"
+    versionedName:       Dorowu OS 2026.10
+    shortVersionedName:  Dorowu 2026.10
+    bootloaderEntryName: Dorowu OS
+    productUrl:          https://github.com
+    supportUrl:          https://github.com
+    knownIssuesUrl:      https://github.com
+    releaseNotesUrl:     https://github.com
+
+images:
+    productLogo:         "dorowu-logo.png"
+    productIcon:         "dorowu-logo.png"
+    productWelcome:      "welcome.png"
+
+slideshow:               "show.qml"
+
+style:
+   SidebarBackground:    "#131722"
+   SidebarText:          "#e2e8f0"
+   SidebarTextSelect:    "#ffffff"
+   SidebarTextHighlight: "#38bdf8"
+   SidebarBackgroundSelect: "#1e2638"

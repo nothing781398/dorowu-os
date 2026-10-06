@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+WP="/usr/share/backgrounds/dorowu/default.png"
+if [[ -f "${WP}" ]] && command -v plasma-apply-wallpaperimage &>/dev/null; then
+    plasma-apply-wallpaperimage "${WP}" || true
+fi

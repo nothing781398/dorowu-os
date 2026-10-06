@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Install Dorowu OS
+Comment=Install Dorowu OS permanently to disk
+Exec=/usr/local/bin/dorowu-install
+Icon=dorowu-logo
+Terminal=false
+StartupNotify=true
+Categories=System;

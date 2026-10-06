@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+echo "=== Dorowu OS: Google Drive Cloud Mount Setup ==="
+mkdir -p "${HOME}/.config/rclone" "${HOME}/GoogleDrive"
+
+if ! rclone listremotes 2>/dev/null | grep -q "^gdrive:"; then
+    echo "[+] Configuring Google Drive remote 'gdrive'..."
+    rclone config create gdrive drive scope drive
+fi
+
+systemctl --user daemon-reload
+systemctl --user enable --now rclone-gdrive.service
+echo "[+] Google Drive mounted at ~/GoogleDrive and enabled on login."

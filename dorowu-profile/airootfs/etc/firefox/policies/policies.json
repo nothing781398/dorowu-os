@@ -1,0 +1,17 @@
+{
+  "policies": {
+    "DisableTelemetry": true,
+    "DisableFirefoxStudies": true,
+    "EnableTrackingProtection": {
+      "Value": true,
+      "Locked": false,
+      "Cryptomining": true,
+      "Fingerprinting": true
+    },
+    "Homepage": {
+      "URL": "https://duckduckgo.com",
+      "Locked": false,
+      "StartPage": "homepage"
+    }
+  }
+}

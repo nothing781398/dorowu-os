@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Google Drive Setup
+Comment=Mount Google Drive as a local folder in Dorowu OS
+Exec=/usr/local/bin/dorowu-gdrive-setup
+Icon=folder-google-drive
+Terminal=true
+Type=Application
+Categories=Network;Utility;

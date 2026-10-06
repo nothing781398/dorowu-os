@@ -1,0 +1,11 @@
+[General]
+TerminalApplication=kitty
+TerminalService=kitty.desktop
+ColorScheme=BreezeDark
+
+[Icons]
+Theme=Papirus-Dark
+
+[KDE]
+LookNFeelPackage=org.kde.breezedark.desktop
+SingleClick=false

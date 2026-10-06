@@ -1,0 +1,12 @@
+[Plugins]
+blurEnabled=true
+translucencyEnabled=true
+glideEnabled=true
+
+[Windows]
+FocusPolicy=FocusFollowsMouse
+GeometryTip=false
+
+[org.kde.kdecoration2]
+ButtonsOnRight=IAX
+BorderSize=Normal

@@ -9,6 +9,10 @@ set -euo pipefail
 trap 'echo "[-] Error on line ${LINENO}: command \"${BASH_COMMAND}\" failed with exit code $?" >&2' ERR
 
 echo "==> Initializing Dorowu OS generation..."
+
+# Clean up any residual web template files if running inside a converted repo
+rm -f index.html index.htmlhtml index.HTML
+
 PROJECT_DIR="$(pwd)"
 PROFILE_DIR="${PROJECT_DIR}/dorowu-profile"
 AIROOTFS="${PROFILE_DIR}/airootfs"
@@ -24,12 +28,16 @@ mkdir -p "${PROFILE_DIR}" "${SCRIPTS_DIR}" "${WORKFLOW_DIR}" \
   "${AIROOTFS}/etc/sddm.conf.d" \
   "${AIROOTFS}/etc/sudoers.d" \
   "${AIROOTFS}/etc/profile.d" \
+  "${AIROOTFS}/etc/fonts" \
+  "${AIROOTFS}/etc/firefox/policies" \
   "${AIROOTFS}/etc/systemd/system/multi-user.target.wants" \
   "${AIROOTFS}/etc/systemd/system/sysinit.target.wants" \
   "${AIROOTFS}/etc/skel/.config/autostart" \
   "${AIROOTFS}/etc/skel/.config/kitty" \
   "${AIROOTFS}/etc/skel/.config/systemd/user/default.target.wants" \
+  "${AIROOTFS}/etc/skel/.icons/default" \
   "${AIROOTFS}/etc/skel/Desktop" \
+  "${AIROOTFS}/usr/share/icons/default" \
   "${AIROOTFS}/usr/local/bin" \
   "${AIROOTFS}/usr/share/applications" \
   "${AIROOTFS}/usr/share/backgrounds/dorowu" \
@@ -51,8 +59,7 @@ iso_version="$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y.%m.%d)"
 install_dir="dorowu"
 buildmodes=('iso')
 
-# bootmodes: archiso standard releng uses Syslinux for legacy BIOS (bios.syslinux.*)
-# and GRUB for UEFI x86_64 (uefi-x64.grub.*). BIOS GRUB is not in standard archiso bootmodes.
+# bootmodes: GRUB is used for UEFI x86_64, Syslinux for legacy BIOS.
 bootmodes=('bios.syslinux.mbr' 'bios.syslinux.eltorito' 'uefi-x64.grub.esp' 'uefi-x64.grub.eltorito')
 arch="x86_64"
 pacman_conf="pacman.conf"
@@ -101,7 +108,7 @@ EOF_PACMAN
 
 echo "==> Generating packages.x86_64..."
 cat <<'EOF_PACKAGES' > "${PROFILE_DIR}/packages.x86_64"
-# --- Base System & Boot ---
+# --- Base Linux Kernel & Hardware Essentials ---
 base
 base-devel
 linux
@@ -113,7 +120,6 @@ mkinitcpio-archiso
 grub
 efibootmgr
 os-prober
-dosfstools
 mtools
 squashfs-tools
 rsync
@@ -121,11 +127,30 @@ libpwquality
 kpmcore
 yaml-cpp
 boost-libs
+upower
+power-profiles-daemon
 
-# --- Graphics & KDE Plasma 6 Desktop ---
+# --- Complete Filesystem Support ---
+btrfs-progs
+dosfstools
+e2fsprogs
+exfatprogs
+f2fs-tools
+ntfs-3g
+
+# --- Graphics & Display Drivers ---
+mesa
+vulkan-intel
+vulkan-radeon
+libva-mesa-driver
+xf86-video-amdgpu
+xf86-video-ati
+xf86-video-nouveau
 xorg-server
 xorg-xwayland
 qt6-wayland
+
+# --- KDE Plasma 6 Desktop Environment ---
 sddm
 sddm-kcm
 plasma-desktop
@@ -142,47 +167,55 @@ xdg-desktop-portal-kde
 xdg-user-dirs
 xdg-utils
 
-# --- Audio & Networking ---
+# --- Audio & Networking Stack ---
 pipewire
 pipewire-pulse
 pipewire-alsa
 wireplumber
+pavucontrol
 networkmanager
 bluez
 bluez-utils
+bluedevil
 cups
 
-# --- Utilities & Filesystems ---
+# --- Archive Utilities ---
 p7zip
 unzip
 unrar
+tar
+gzip
+bzip2
+xz
+zstd
 gvfs
 gvfs-smb
-ntfs-3g
-exfatprogs
-partitionmanager
 
-# --- Core Apps & Software Center ---
-firefox
-dolphin
-gwenview
-ark
-okular
-spectacle
-kate
-kcalc
+# --- Dorowu App Store & Flatpak Center ---
 discover
 packagekit-qt6
+archlinux-appstream-data
 flatpak
 fwupd
 
-# --- Google Drive Storage Integration ---
+# --- Real Mozilla Firefox & Core System Apps ---
+firefox
+dolphin
+kate
+kcalc
+ark
+okular
+gwenview
+spectacle
+partitionmanager
+
+# --- Google Drive Cloud Integration ---
 rclone
 fuse3
 kio-gdrive
 kaccounts-providers
 
-# --- Terminal & Hardcore Dev Environment ---
+# --- Hardcore Developer & Terminal Environment ---
 kitty
 python
 python-pip
@@ -210,7 +243,7 @@ man-db
 reflector
 imagemagick
 
-# --- Fonts ---
+# --- Fonts & Complete Emojis ---
 noto-fonts
 noto-fonts-emoji
 ttf-liberation
@@ -220,6 +253,56 @@ ttf-jetbrains-mono
 ckbcomp
 calamares
 EOF_PACKAGES
+
+echo "==> Configuring Fontconfig for system-wide Emoji rendering..."
+cat <<'EOF_FONTS' > "${AIROOTFS}/etc/fonts/local.conf"
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+<fontconfig>
+  <alias>
+    <family>sans-serif</family>
+    <prefer>
+      <family>Noto Sans</family>
+      <family>Noto Color Emoji</family>
+    </prefer>
+  </alias>
+  <alias>
+    <family>serif</family>
+    <prefer>
+      <family>Noto Serif</family>
+      <family>Noto Color Emoji</family>
+    </prefer>
+  </alias>
+  <alias>
+    <family>monospace</family>
+    <prefer>
+      <family>JetBrains Mono</family>
+      <family>Noto Color Emoji</family>
+    </prefer>
+  </alias>
+</fontconfig>
+EOF_FONTS
+
+echo "==> Configuring Mozilla Firefox enterprise policies..."
+cat <<'EOF_FIREFOX' > "${AIROOTFS}/etc/firefox/policies/policies.json"
+{
+  "policies": {
+    "DisableTelemetry": true,
+    "DisableFirefoxStudies": true,
+    "EnableTrackingProtection": {
+      "Value": true,
+      "Locked": false,
+      "Cryptomining": true,
+      "Fingerprinting": true
+    },
+    "Homepage": {
+      "URL": "https://duckduckgo.com",
+      "Locked": false,
+      "StartPage": "homepage"
+    }
+  }
+}
+EOF_FIREFOX
 
 echo "==> Writing user accounts and sudo configuration..."
 cat <<'EOF_PASSWD' > "${AIROOTFS}/etc/passwd"
@@ -326,7 +409,7 @@ cat <<'EOF_SUDOERS' > "${AIROOTFS}/etc/sudoers.d/99-dorowu-live"
 dorowu ALL=(ALL:ALL) NOPASSWD: ALL
 EOF_SUDOERS
 
-echo "==> Configuring system defaults and SDDM autologin..."
+echo "==> Configuring system defaults and SDDM autologin with Black Cursor..."
 echo "dorowu" > "${AIROOTFS}/etc/hostname"
 echo "en_US.UTF-8 UTF-8" > "${AIROOTFS}/etc/locale.gen"
 echo "LANG=en_US.UTF-8" > "${AIROOTFS}/etc/locale.conf"
@@ -340,7 +423,23 @@ Session=plasmawayland
 [Theme]
 Current=breeze
 CursorTheme=breeze_cursors
+CursorSize=24
 EOF_SDDM
+
+# Default Black Cursor configuration (Breeze Black Cursor)
+cat <<'EOF_CURSOR_SKEL' > "${AIROOTFS}/etc/skel/.icons/default/index.theme"
+[Icon Theme]
+Name=Default
+Comment=Dorowu OS Default Black Cursor Theme
+Inherits=breeze_cursors
+EOF_CURSOR_SKEL
+
+cat <<'EOF_CURSOR_SYS' > "${AIROOTFS}/usr/share/icons/default/index.theme"
+[Icon Theme]
+Name=Default
+Comment=Dorowu OS Default Black Cursor Theme
+Inherits=breeze_cursors
+EOF_CURSOR_SYS
 
 echo "==> Configuring systemd service symlinks..."
 ln -sf /usr/lib/systemd/system/NetworkManager.service "${AIROOTFS}/etc/systemd/system/multi-user.target.wants/NetworkManager.service"
@@ -350,7 +449,7 @@ ln -sf /usr/lib/systemd/system/sddm.service "${AIROOTFS}/etc/systemd/system/disp
 
 cat <<'EOF_FLATHUB' > "${AIROOTFS}/usr/lib/systemd/system/dorowu-flathub.service"
 [Unit]
-Description=Initialize Flathub remote repository
+Description=Initialize Flathub remote repository for Dorowu App Store
 After=network-online.target
 Wants=network-online.target
 ConditionPathExists=!/var/lib/flatpak/repo/flathub.ready
@@ -364,6 +463,20 @@ ExecStart=/bin/sh -c 'flatpak remote-add --if-not-exists flathub https://dl.flat
 WantedBy=multi-user.target
 EOF_FLATHUB
 ln -sf /usr/lib/systemd/system/dorowu-flathub.service "${AIROOTFS}/etc/systemd/system/multi-user.target.wants/dorowu-flathub.service"
+
+echo "==> Creating Dorowu App Store desktop shortcut..."
+cat <<'EOF_APPSTORE_DESK' > "${AIROOTFS}/usr/share/applications/dorowu-appstore.desktop"
+[Desktop Entry]
+Type=Application
+Name=Dorowu App Store
+GenericName=Software Center
+Comment=Install applications, utilities, games, and developer tools
+Exec=plasma-discover %F
+Icon=org.kde.discover
+Terminal=false
+Categories=System;PackageManager;
+StartupNotify=true
+EOF_APPSTORE_DESK
 
 echo "==> Configuring Google Drive systemd user service & setup helper..."
 cat <<'EOF_GDRIVE_SVC' > "${AIROOTFS}/usr/lib/systemd/user/rclone-gdrive.service"
@@ -776,7 +889,7 @@ while true; do
 done
 EOF_AI_ASSISTANT
 
-echo "==> Configuring KDE Plasma 6 Desktop and Zorin-like Layout..."
+echo "==> Configuring KDE Plasma 6 Desktop and Dorowu OS Layout..."
 cat <<'EOF_KDEGLOBALS' > "${AIROOTFS}/etc/skel/.config/kdeglobals"
 [General]
 TerminalApplication=kitty
@@ -790,6 +903,12 @@ Theme=Papirus-Dark
 LookNFeelPackage=org.kde.breezedark.desktop
 SingleClick=false
 EOF_KDEGLOBALS
+
+cat <<'EOF_KCMINPUTRC' > "${AIROOTFS}/etc/skel/.config/kcminputrc"
+[Mouse]
+cursorTheme=breeze_cursors
+cursorSize=24
+EOF_KCMINPUTRC
 
 cat <<'EOF_KWINRC' > "${AIROOTFS}/etc/skel/.config/kwinrc"
 [Plugins]
@@ -828,7 +947,7 @@ immutability=1
 plugin=org.kde.plasma.icontasks
 
 [Containments][1][Applets][3][Configuration][General]
-launchers=applications:org.kde.dolphin.desktop,applications:kitty.desktop,applications:firefox.desktop,applications:org.kde.discover.desktop
+launchers=applications:org.kde.dolphin.desktop,applications:kitty.desktop,applications:firefox.desktop,applications:dorowu-appstore.desktop
 
 [Containments][1][Applets][4]
 immutability=1
@@ -1133,7 +1252,7 @@ Rectangle {
         }
 
         Text {
-            text: "A clean, modern Arch-based system with full developer tooling."
+            text: "A clean, modern Arch-based system with full developer tooling & App Store."
             color: "#94a3b8"
             font.pixelSize: 14
             anchors.horizontalCenter: parent.horizontalCenter
@@ -1293,14 +1412,14 @@ else
   <defs>
     <linearGradient id="dorowu_grad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#2563eb"/>
-      <stop offset="50%" stop-color="#0284c7"/>
-      <stop offset="100%" stop-color="#0d9488"/>
+      <stop offset="45%" stop-color="#0284c7"/>
+      <stop offset="100%" stop-color="#00c49f"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="115" fill="url(#dorowu_grad)"/>
-  <path d="M150 120 h 110 c 65 0 115 45 115 136 s -50 136 -115 136 h -110 z" fill="#ffffff"/>
-  <path d="M218 178 v 156 h 42 c 38 0 68 -24 68 -78 s -30 -78 -68 -78 z" fill="url(#dorowu_grad)"/>
-  <path d="M232 334 l 38 -65 l 25 35 l 16 -20 l 25 50 z" fill="#e0f2fe"/>
+  <rect width="512" height="512" rx="112" ry="112" fill="url(#dorowu_grad)"/>
+  <path d="M 156 122 H 262 C 328 122 376 166 376 256 C 376 346 328 390 262 390 H 156 Z" fill="#ffffff"/>
+  <path d="M 222 178 V 334 H 256 C 298 334 322 308 322 256 C 322 204 298 178 256 178 Z" fill="url(#dorowu_grad)"/>
+  <path d="M 236 334 L 274 262 L 296 306 L 314 282 L 322 298 V 334 Z" fill="#e0f2fe"/>
 </svg>
 SVG_EOF
 fi
@@ -1471,7 +1590,11 @@ CHECK_FILES=(
   "${AIROOTFS}/etc/skel/.config/kitty/kitty.conf"
   "${AIROOTFS}/etc/skel/.config/kdeglobals"
   "${AIROOTFS}/etc/skel/.config/kwinrc"
+  "${AIROOTFS}/etc/skel/.config/kcminputrc"
   "${AIROOTFS}/etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc"
+  "${AIROOTFS}/usr/share/applications/dorowu-appstore.desktop"
+  "${AIROOTFS}/etc/firefox/policies/policies.json"
+  "${AIROOTFS}/etc/fonts/local.conf"
   "${AIROOTFS}/usr/local/bin/dorowu-install"
   "${AIROOTFS}/usr/local/bin/dorowu-set-wallpaper"
   "${AIROOTFS}/usr/local/bin/dorowu-gdrive-setup"

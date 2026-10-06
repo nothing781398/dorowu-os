@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Dorowu App Store
+GenericName=Software Center
+Comment=Install applications, utilities, games, and developer tools
+Exec=plasma-discover %F
+Icon=org.kde.discover
+Terminal=false
+Categories=System;PackageManager;
+StartupNotify=true

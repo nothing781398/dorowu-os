@@ -1,0 +1,13 @@
+[Unit]
+Description=Initialize Flathub remote repository for Dorowu App Store
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!/var/lib/flatpak/repo/flathub.ready
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true; touch /var/lib/flatpak/repo/flathub.ready'
+
+[Install]
+WantedBy=multi-user.target

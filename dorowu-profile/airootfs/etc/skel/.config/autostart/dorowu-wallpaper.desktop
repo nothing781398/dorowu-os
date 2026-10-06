@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Dorowu Wallpaper Setter
+Exec=/usr/local/bin/dorowu-set-wallpaper
+Hidden=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

@@ -1,0 +1,271 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONFIG_DIR="${HOME}/.config/dorowu"
+CONFIG_FILE="${CONFIG_DIR}/ai-assistant.conf"
+
+PROVIDER="gemini"
+MODEL="gemini-2.5-flash"
+API_KEY="${GEMINI_API_KEY:-}"
+OPENAI_BASE_URL="https://api.openai.com/v1"
+SYSTEM_PROMPT="You are the Dorowu OS Terminal AI Assistant, an expert Linux and software development companion built into Dorowu OS. Provide clear, concise, actionable terminal commands and explanations."
+
+load_config() {
+    if [[ -f "${CONFIG_FILE}" ]]; then
+        # shellcheck source=/dev/null
+        source "${CONFIG_FILE}"
+    fi
+    if [[ "${PROVIDER}" == "gemini" && -z "${API_KEY}" ]]; then
+        API_KEY="${GEMINI_API_KEY:-}"
+    elif [[ "${PROVIDER}" == "openai" && -z "${API_KEY}" ]]; then
+        API_KEY="${OPENAI_API_KEY:-}"
+    fi
+}
+
+print_help() {
+    cat <<'HLP'
+Dorowu OS Terminal AI Assistant
+Usage:
+  ai-assistant [options] [prompt]
+  cat error.log | ai-assistant "how do I fix this?"
+
+Options:
+  -h, --help            Show this help documentation
+  -m, --model MODEL     Specify model (default: gemini-2.5-flash)
+  -p, --provider TYPE   Set provider: 'gemini' (default) or 'openai'
+  -c, --config          Run interactive configuration wizard
+  -r, --reset           Reset local conversation history
+
+Environment:
+  GEMINI_API_KEY        API key for Google Gemini
+  OPENAI_API_KEY        API key for OpenAI-compatible endpoints
+HLP
+}
+
+interactive_config() {
+    mkdir -p "${CONFIG_DIR}"
+    echo "=== Dorowu OS AI Assistant Setup ==="
+    read -r -p "Provider [gemini/openai] (default: gemini): " chosen_prov
+    chosen_prov="${chosen_prov:-gemini}"
+
+    if [[ "${chosen_prov}" == "openai" ]]; then
+        read -r -p "OpenAI Base URL (default: https://api.openai.com/v1): " chosen_url
+        chosen_url="${chosen_url:-https://api.openai.com/v1}"
+        read -r -p "Model (default: gpt-4o-mini): " chosen_mod
+        chosen_mod="${chosen_mod:-gpt-4o-mini}"
+        read -r -s -p "API Key: " chosen_key
+        echo ""
+        cat > "${CONFIG_FILE}" <<CFG
+PROVIDER="openai"
+OPENAI_BASE_URL="${chosen_url}"
+MODEL="${chosen_mod}"
+API_KEY="${chosen_key}"
+CFG
+    else
+        read -r -p "Gemini Model (default: gemini-2.5-flash): " chosen_mod
+        chosen_mod="${chosen_mod:-gemini-2.5-flash}"
+        read -r -s -p "Gemini API Key: " chosen_key
+        echo ""
+        cat > "${CONFIG_FILE}" <<CFG
+PROVIDER="gemini"
+MODEL="${chosen_mod}"
+API_KEY="${chosen_key}"
+CFG
+    fi
+    chmod 0600 "${CONFIG_FILE}"
+    echo "[+] Configuration saved to ${CONFIG_FILE}"
+    exit 0
+}
+
+check_credentials() {
+    if [[ -z "${API_KEY}" ]]; then
+        echo -e "\033[01;31mError: No API key found for provider '${PROVIDER}'.\033[00m" >&2
+        echo "" >&2
+        echo "To get started, provide your API key via:" >&2
+        if [[ "${PROVIDER}" == "gemini" ]]; then
+            echo "  export GEMINI_API_KEY='your_gemini_api_key'" >&2
+            echo "  or run: ai-assistant --config" >&2
+        else
+            echo "  export OPENAI_API_KEY='your_api_key'" >&2
+            echo "  or run: ai-assistant --config" >&2
+        fi
+        exit 1
+    fi
+}
+
+call_gemini() {
+    local contents_json="$1"
+    local url="https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}"
+    local payload
+    payload=$(jq -n \
+        --arg sys "${SYSTEM_PROMPT}" \
+        --argjson contents "${contents_json}" \
+        '{
+            systemInstruction: { parts: [{ text: $sys }] },
+            contents: $contents,
+            generationConfig: { temperature: 0.7 }
+        }')
+
+    local tmp_out
+    tmp_out=$(mktemp)
+    local http_code
+    http_code=$(curl -s -S -w "%{http_code}" -X POST "${url}" \
+        -H "Content-Type: application/json" \
+        -d "${payload}" \
+        -o "${tmp_out}" || echo "000")
+
+    if [[ "${http_code}" == "000" ]]; then
+        echo "Error: Network request failed. Check internet connectivity." >&2
+        rm -f "${tmp_out}"
+        return 1
+    fi
+
+    if [[ "${http_code}" -ne 200 ]]; then
+        local err_msg
+        err_msg=$(jq -r '.error.message // "Unknown error"' "${tmp_out}" 2>/dev/null || cat "${tmp_out}")
+        echo "API Error (${http_code}): ${err_msg}" >&2
+        rm -f "${tmp_out}"
+        return 1
+    fi
+
+    local text_res
+    text_res=$(jq -r '.candidates[0].content.parts[0].text // empty' "${tmp_out}" 2>/dev/null)
+    rm -f "${tmp_out}"
+
+    if [[ -z "${text_res}" ]]; then
+        echo "Warning: Model returned empty content." >&2
+        return 1
+    fi
+
+    echo "${text_res}"
+}
+
+call_openai() {
+    local messages_json="$1"
+    local url="${OPENAI_BASE_URL}/chat/completions"
+    local payload
+    payload=$(jq -n \
+        --arg model "${MODEL}" \
+        --arg sys "${SYSTEM_PROMPT}" \
+        --argjson msgs "${messages_json}" \
+        '{
+            model: $model,
+            messages: ([{ role: "system", content: $sys }] + $msgs)
+        }')
+
+    local tmp_out
+    tmp_out=$(mktemp)
+    local http_code
+    http_code=$(curl -s -S -w "%{http_code}" -X POST "${url}" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer ${API_KEY}" \
+        -d "${payload}" \
+        -o "${tmp_out}" || echo "000")
+
+    if [[ "${http_code}" == "000" ]]; then
+        echo "Error: Network request failed." >&2
+        rm -f "${tmp_out}"
+        return 1
+    fi
+
+    if [[ "${http_code}" -ne 200 ]]; then
+        local err_msg
+        err_msg=$(jq -r '.error.message // "Unknown error"' "${tmp_out}" 2>/dev/null || cat "${tmp_out}")
+        echo "API Error (${http_code}): ${err_msg}" >&2
+        rm -f "${tmp_out}"
+        return 1
+    fi
+
+    local text_res
+    text_res=$(jq -r '.choices[0].message.content // empty' "${tmp_out}" 2>/dev/null)
+    rm -f "${tmp_out}"
+
+    if [[ -z "${text_res}" ]]; then
+        echo "Warning: Empty response from provider." >&2
+        return 1
+    fi
+
+    echo "${text_res}"
+}
+
+load_config
+
+PROMPT_ARGS=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            print_help
+            exit 0
+            ;;
+        -c|--config)
+            interactive_config
+            ;;
+        -m|--model)
+            MODEL="$2"
+            shift 2
+            ;;
+        -p|--provider)
+            PROVIDER="$2"
+            shift 2
+            ;;
+        *)
+            PROMPT_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+check_credentials
+
+# Handle piped input
+STDIN_INPUT=""
+if [[ ! -t 0 ]]; then
+    STDIN_INPUT=$(cat)
+fi
+
+if [[ -n "${STDIN_INPUT}" || ${#PROMPT_ARGS[@]} -gt 0 ]]; then
+    FULL_QUERY="${PROMPT_ARGS[*]:-}"
+    if [[ -n "${STDIN_INPUT}" ]]; then
+        if [[ -n "${FULL_QUERY}" ]]; then
+            FULL_QUERY="${FULL_QUERY}"$'\n\nInput Context:\n'"${STDIN_INPUT}"
+        else
+            FULL_QUERY="${STDIN_INPUT}"
+        fi
+    fi
+
+    if [[ "${PROVIDER}" == "gemini" ]]; then
+        CONTENTS=$(jq -n --arg q "${FULL_QUERY}" '[{ role: "user", parts: [{ text: $q }] }]')
+        call_gemini "${CONTENTS}"
+    else
+        MSGS=$(jq -n --arg q "${FULL_QUERY}" '[{ role: "user", content: $q }]')
+        call_openai "${MSGS}"
+    fi
+    exit 0
+fi
+
+# Interactive REPL session
+echo -e "\033[01;36mDorowu OS AI Terminal Assistant [Model: ${MODEL}]\033[00m"
+echo "Type your message or 'exit' / 'quit' to end session."
+echo ""
+
+SESSION_HISTORY="[]"
+
+while true; do
+    read -r -e -p "dorowu-ai> " user_input || break
+    [[ -z "${user_input}" ]] && continue
+    if [[ "${user_input}" == "exit" || "${user_input}" == "quit" ]]; then
+        break
+    fi
+
+    if [[ "${PROVIDER}" == "gemini" ]]; then
+        SESSION_HISTORY=$(jq --arg q "${user_input}" '. + [{ role: "user", parts: [{ text: $q }] }]' <<< "${SESSION_HISTORY}")
+        reply=$(call_gemini "${SESSION_HISTORY}") || continue
+        echo -e "\n${reply}\n"
+        SESSION_HISTORY=$(jq --arg a "${reply}" '. + [{ role: "model", parts: [{ text: $a }] }]' <<< "${SESSION_HISTORY}")
+    else
+        SESSION_HISTORY=$(jq --arg q "${user_input}" '. + [{ role: "user", content: $q }]' <<< "${SESSION_HISTORY}")
+        reply=$(call_openai "${SESSION_HISTORY}") || continue
+        echo -e "\n${reply}\n"
+        SESSION_HISTORY=$(jq --arg a "${reply}" '. + [{ role: "assistant", content: $a }]' <<< "${SESSION_HISTORY}")
+    fi
+done
