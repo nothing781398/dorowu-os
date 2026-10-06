@@ -11,6 +11,7 @@ archlinux-keyring
 sudo
 which
 grub
+syslinux
 efibootmgr
 os-prober
 mtools
