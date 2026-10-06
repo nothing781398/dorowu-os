@@ -19,7 +19,8 @@ pacman -Syu --noconfirm --needed \
   curl \
   python \
   nodejs \
-  npm
+  npm \
+  grub # <--- FIXED: Added grub to prevent uefi-x64.grub.esp validation crash
 
 echo "==> Building AUR packages into local repository"
 bash build-local-repo.sh
