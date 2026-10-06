@@ -1,0 +1,6 @@
+{
+  "name": "Dorowu OS Generator",
+  "description": "Production-grade Arch ISO generator for Dorowu OS with Calamares, KDE Plasma 6, and CI build automation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
