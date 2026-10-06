@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Dorowu AI Assistant
+GenericName=AI System Companion
+Comment=Official Dorowu OS desktop AI companion for Linux troubleshooting, development, and general intelligence
+Exec=/usr/local/bin/dorowu-ai-ui
+Icon=dorowu-logo
+Terminal=false
+StartupNotify=true
+Categories=Utility;Development;System;

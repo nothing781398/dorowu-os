@@ -22,7 +22,7 @@ file_permissions=(
   ["/usr/local/bin/dorowu-install"]="0:0:0755"
   ["/usr/local/bin/dorowu-set-wallpaper"]="0:0:0755"
   ["/usr/local/bin/dorowu-gdrive-setup"]="0:0:0755"
-  ["/usr/local/bin/ai-assistant"]="0:0:0755"
+  ["/usr/local/bin/dorowu-ai-ui"]="0:0:0755"
   ["/etc/skel/.config/autostart/dorowu-live-setup.desktop"]="1000:1000:0755"
   ["/etc/skel/Desktop/dorowu-installer.desktop"]="1000:1000:0755"
 )

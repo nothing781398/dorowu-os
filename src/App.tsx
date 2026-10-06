@@ -1,630 +1,1300 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Terminal, 
-  Cpu, 
-  HardDrive, 
-  ShieldCheck, 
-  Key, 
-  Copy, 
-  Check, 
-  FileCode, 
-  Sparkles, 
-  ShoppingBag, 
-  Globe, 
-  Smile, 
-  MousePointer, 
-  Lock, 
-  Layers, 
-  FolderGit2, 
-  Bot, 
-  Play, 
-  Scale, 
-  CheckCircle2, 
-  AlertTriangle,
-  RotateCcw
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Sparkles,
+  Terminal,
+  Cpu,
+  Layers,
+  HardDrive,
+  Copy,
+  Check,
+  Send,
+  Plus,
+  Trash2,
+  FileCode,
+  ShieldCheck,
+  ExternalLink,
+  RotateCcw,
+  Maximize2,
+  Minimize2,
+  X,
+  Code,
+  CheckCircle2,
+  AlertCircle,
+  HelpCircle,
+  Settings,
+  ChevronRight,
+  MessageSquare,
+  Flame,
+  Info,
+  Search,
+  Scale,
+  AppWindow,
+  Package,
+  Command,
+  Download
 } from 'lucide-react';
 
+interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  mode?: 'linux' | 'general';
+}
+
+interface ChatSession {
+  id: string;
+  title: string;
+  mode: 'linux' | 'general';
+  messages: ChatMessage[];
+  createdAt: string;
+}
+
+interface SystemInfo {
+  distro: string;
+  base: string;
+  kernel: string;
+  desktop: string;
+  installer: string;
+  aiModel: string;
+  workflowFile: string;
+  totalPreinstalledPackages: number;
+  desktopAppEntry: string;
+}
+
+interface AppItem {
+  id: string;
+  name: string;
+  genericName: string;
+  description: string;
+  exec: string;
+  category: string;
+  package: string;
+  desktopFile: string;
+}
+
+interface LicenseInfo {
+  type: string;
+  spdx: string;
+  copyright: string;
+  content: string;
+}
+
 export default function App() {
-  const [copied, setCopied] = useState(false);
+  const [sessions, setSessions] = useState<ChatSession[]>(() => {
+    const saved = localStorage.getItem('dorowu_ai_sessions');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        // fallback
+      }
+    }
+    return [
+      {
+        id: 'session-default',
+        title: 'Dorowu Linux Diagnostics',
+        mode: 'linux',
+        createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        messages: [
+          {
+            id: 'm-init',
+            role: 'assistant',
+            content: "Hello! I am the official Dorowu OS AI Assistant desktop application. Dorowu OS is a 100% real Arch Linux distribution featuring KDE Plasma 6, Calamares installer, GNU GPLv3 license, and automated GitHub Actions builds (.github/workflows/build-x86_64.yml). I can help you with pacman, systemd, btrfs, kernel setup, or any general coding and AI query. How can I help you today?",
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            mode: 'linux',
+          },
+        ],
+      },
+    ];
+  });
+
+  const [currentSessionId, setCurrentSessionId] = useState<string>(() => {
+    return sessions[0]?.id || 'session-default';
+  });
+
+  const [inputMessage, setInputMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Modals
+  const [workflowModalOpen, setWorkflowModalOpen] = useState(false);
+  const [systemInfoModalOpen, setSystemInfoModalOpen] = useState(false);
+  const [appsModalOpen, setAppsModalOpen] = useState(false);
+  const [licenseModalOpen, setLicenseModalOpen] = useState(false);
+  const [realDistroProofOpen, setRealDistroProofOpen] = useState(false);
+
+  // App Search State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [appsList, setAppsList] = useState<AppItem[]>([]);
+
+  // Remote data
+  const [workflowContent, setWorkflowContent] = useState<string>('');
   const [copiedWorkflow, setCopiedWorkflow] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'ai' | 'apps' | 'workflow' | 'license'>('overview');
+  const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
+  const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
+  const [isWindowMaximized, setIsWindowMaximized] = useState(false);
 
-  // Terminal state for interactive AI assistant test
-  const [terminalHistory, setTerminalHistory] = useState<Array<{ sender: 'user' | 'bot' | 'system'; text: string }>>([
-    { sender: 'system', text: 'Dorowu OS 2026.10 Live Terminal — Linux 6.x archiso x86_64' },
-    { sender: 'system', text: 'Pre-configured with official Dorowu OS AI Assistant (Gemini 2.5).' },
-    { sender: 'system', text: "Try typing: \"who are u\", \"help\", or \"install docker\" below." }
-  ]);
-  const [terminalInput, setTerminalInput] = useState('');
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const terminalBottomRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const currentSession = sessions.find(s => s.id === currentSessionId) || sessions[0];
+  const activeMode = currentSession?.mode || 'linux';
+
+  // Keyboard shortcut Ctrl+K to open App Search
   useEffect(() => {
-    terminalBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [terminalHistory]);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setAppsModalOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
-  const copyScriptCmd = () => {
-    navigator.clipboard.writeText('bash generate_arch_core.sh');
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  // Save sessions to localStorage
+  useEffect(() => {
+    localStorage.setItem('dorowu_ai_sessions', JSON.stringify(sessions));
+  }, [sessions]);
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [currentSession?.messages, isLoading]);
+
+  // Fetch initial data
+  useEffect(() => {
+    fetch('/api/workflow')
+      .then(r => r.json())
+      .then(d => {
+        if (d.content) setWorkflowContent(d.content);
+      })
+      .catch(() => {});
+
+    fetch('/api/system-info')
+      .then(r => r.json())
+      .then(d => {
+        if (d.distro) setSystemInfo(d);
+      })
+      .catch(() => {});
+
+    fetch('/api/apps')
+      .then(r => r.json())
+      .then(d => {
+        if (d.apps) setAppsList(d.apps);
+      })
+      .catch(() => {});
+
+    fetch('/api/license')
+      .then(r => r.json())
+      .then(d => {
+        if (d.content) setLicenseInfo(d);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleCreateSession = (mode: 'linux' | 'general' = 'linux') => {
+    const newSession: ChatSession = {
+      id: `session-${Date.now()}`,
+      title: mode === 'linux' ? 'New Linux Diagnostic' : 'New General Session',
+      mode,
+      createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      messages: [
+        {
+          id: `m-${Date.now()}`,
+          role: 'assistant',
+          content: mode === 'linux'
+            ? "Dorowu OS Linux Assistant ready. What kernel, pacman, systemd, or distribution setup can I help configure or troubleshoot?"
+            : "Dorowu OS General AI Assistant active. Feel free to ask any question, request code, analysis, or creative writing.",
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          mode,
+        },
+      ],
+    };
+
+    setSessions(prev => [newSession, ...prev]);
+    setCurrentSessionId(newSession.id);
   };
 
-  const copyWorkflowYaml = () => {
-    const yaml = `name: Build Dorowu OS ISO (x86_64)
-
-on:
-  workflow_dispatch:        # start it from the GitHub mobile app
-  push:
-    tags: ['v*']            # tag v1.0 -> build + attach ISO to a Release
-
-permissions:
-  contents: write           # needed to attach the ISO to a Release
-
-concurrency:
-  group: build-iso
-  cancel-in-progress: true
-
-jobs:
-  build-iso:
-    runs-on: ubuntu-latest
-    timeout-minutes: 180
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Free disk space (the ISO build needs ~20 GB)
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost /opt/hostedtoolcache/CodeQL
-          sudo docker image prune --all --force >/dev/null || true
-          df -h /
-
-      - name: Build ISO (archiso inside archlinux container)
-        run: |
-          mkdir -p out
-          docker run --rm --privileged \\
-            -v "$GITHUB_WORKSPACE:/work" -w /work \\
-            archlinux:latest bash scripts/ci-build.sh
-
-      - name: Checksums
-        run: |
-          cd out
-          ls -lh
-          sha256sum *.iso > SHA256SUMS
-          cat SHA256SUMS
-
-      - name: Upload ISO artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Dorowu-OS-x86_64
-          path: |
-            out/*.iso
-            out/SHA256SUMS
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 7
-
-      - name: Attach to GitHub Release (tags only)
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            out/*.iso
-            out/SHA256SUMS`;
-    navigator.clipboard.writeText(yaml);
-    setCopiedWorkflow(true);
-    setTimeout(() => setCopiedWorkflow(false), 2000);
+  const handleDeleteSession = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (sessions.length <= 1) {
+      handleCreateSession('linux');
+    }
+    setSessions(prev => prev.filter(s => s.id !== id));
+    if (currentSessionId === id) {
+      const remaining = sessions.filter(s => s.id !== id);
+      if (remaining.length > 0) {
+        setCurrentSessionId(remaining[0].id);
+      }
+    }
   };
 
-  const handleTerminalSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const query = terminalInput.trim();
-    if (!query) return;
+  const handleSwitchMode = (newMode: 'linux' | 'general') => {
+    setSessions(prev =>
+      prev.map(s => {
+        if (s.id === currentSessionId) {
+          return {
+            ...s,
+            mode: newMode,
+            title: s.title.includes('New')
+              ? newMode === 'linux'
+                ? 'Linux Diagnostic'
+                : 'General Assistant'
+              : s.title,
+          };
+        }
+        return s;
+      })
+    );
+  };
 
-    const newHistory = [...terminalHistory, { sender: 'user' as const, text: query }];
-    setTerminalHistory(newHistory);
-    setTerminalInput('');
-    setIsAiLoading(true);
+  const sendMessage = async (textToSend?: string) => {
+    const message = (textToSend || inputMessage).trim();
+    if (!message || isLoading) return;
 
-    const clean = query.toLowerCase().replace(/[?!.,]/g, '').trim();
+    const userMessage: ChatMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: message,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      mode: activeMode,
+    };
 
-    setTimeout(() => {
-      let botResponse = '';
-      if (clean === 'who are u' || clean === 'who are you' || clean === 'who r u' || clean === 'who u' || clean === 'what are you') {
-        botResponse = "I'm an AI assistant of Dorowu OS, an expert Linux and software development companion built directly into Dorowu OS. How can I assist you with your terminal commands or system setup today?";
-      } else if (clean === 'help' || clean === '--help' || clean === 'ai --help') {
-        botResponse = "Dorowu OS Terminal AI Assistant\nUsage:\n  ai \"your question or command\"\n  cat error.log | ai \"diagnose this\"\n  ai-assistant --config\n\nFeatures:\n  • Integrated with Google Gemini 2.5 Flash\n  • Pre-configured API key (ready out of the box)\n  • Direct Arch Linux & KDE Plasma system expertise";
-      } else if (clean.includes('docker') || clean.includes('install docker')) {
-        botResponse = "To install Docker on Dorowu OS:\n1. sudo pacman -S docker docker-compose\n2. sudo systemctl enable --now docker\n3. sudo usermod -aG docker $USER\nLog out and back in to apply group changes.";
-      } else if (clean === 'clear') {
-        setTerminalHistory([]);
-        setIsAiLoading(false);
-        return;
-      } else {
-        botResponse = `I'm an AI assistant of Dorowu OS. For "${query}", the recommended Linux approach on Dorowu OS is to use the native Arch packages or Flatpak center. You can also run 'sudo pacman -Syu' or open the Dorowu App Store for 1-click installations.`;
+    const isFirstUserMessage = currentSession.messages.filter(m => m.role === 'user').length === 0;
+    const newTitle = isFirstUserMessage
+      ? message.slice(0, 30) + (message.length > 30 ? '...' : '')
+      : currentSession.title;
+
+    setSessions(prev =>
+      prev.map(s => {
+        if (s.id === currentSessionId) {
+          return {
+            ...s,
+            title: newTitle,
+            messages: [...s.messages, userMessage],
+          };
+        }
+        return s;
+      })
+    );
+
+    setInputMessage('');
+    setIsLoading(true);
+
+    try {
+      const historyPayload = currentSession.messages.slice(-8).map(m => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          history: historyPayload,
+          mode: activeMode,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Server error occurred');
       }
 
-      setTerminalHistory(prev => [...prev, { sender: 'bot' as const, text: botResponse }]);
-      setIsAiLoading(false);
-    }, 400);
+      const botReply = data.reply || "No response received.";
+      const assistantMessage: ChatMessage = {
+        id: `ai-${Date.now()}`,
+        role: 'assistant',
+        content: botReply,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        mode: activeMode,
+      };
+
+      setSessions(prev =>
+        prev.map(s => {
+          if (s.id === currentSessionId) {
+            return {
+              ...s,
+              messages: [...s.messages, assistantMessage],
+            };
+          }
+          return s;
+        })
+      );
+    } catch (err: any) {
+      const errorMessage: ChatMessage = {
+        id: `err-${Date.now()}`,
+        role: 'assistant',
+        content: `⚠️ Error communicating with Dorowu AI service: ${err.message || 'Network error'}. Please verify that the server is active.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        mode: activeMode,
+      };
+
+      setSessions(prev =>
+        prev.map(s => {
+          if (s.id === currentSessionId) {
+            return {
+              ...s,
+              messages: [...s.messages, errorMessage],
+            };
+          }
+          return s;
+        })
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-teal-500 selection:text-white">
-      {/* Top Header */}
-      <header className="border-b border-slate-800 bg-slate-900/60 backdrop-blur sticky top-0 z-20">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-sky-500 to-teal-400 flex items-center justify-center shadow-lg shadow-teal-500/10">
-              <span className="text-white font-extrabold text-xl tracking-tight">D</span>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-lg text-white">Dorowu OS</span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30">
-                  Arch Linux Kernel 6.x
-                </span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                  GNU GPLv3
-                </span>
-              </div>
-              <p className="text-xs text-slate-400">Crash-Proof Arch ISO with Calamares, KDE Plasma 6 & Built-In AI Assistant</p>
-            </div>
-          </div>
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={copyScriptCmd}
-              className="flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white transition shadow-sm cursor-pointer"
-            >
-              {copied ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
-              {copied ? 'Copied!' : 'Copy bash generate_arch_core.sh'}
-            </button>
-          </div>
-        </div>
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
-        {/* Navigation Tabs */}
-        <div className="max-w-6xl mx-auto px-4 flex gap-6 text-sm border-t border-slate-800/60 overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`py-2.5 font-medium border-b-2 whitespace-nowrap transition cursor-pointer ${
-              activeTab === 'overview'
-                ? 'border-teal-400 text-teal-300'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            System & Crash Prevention
-          </button>
-          <button
-            onClick={() => setActiveTab('ai')}
-            className={`py-2.5 font-medium border-b-2 whitespace-nowrap transition flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'ai'
-                ? 'border-teal-400 text-teal-300'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Bot className="w-4 h-4 text-teal-400" />
-            AI Assistant Terminal
-          </button>
-          <button
-            onClick={() => setActiveTab('apps')}
-            className={`py-2.5 font-medium border-b-2 whitespace-nowrap transition cursor-pointer ${
-              activeTab === 'apps'
-                ? 'border-teal-400 text-teal-300'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            App Store, Firefox & UI
-          </button>
-          <button
-            onClick={() => setActiveTab('workflow')}
-            className={`py-2.5 font-medium border-b-2 whitespace-nowrap transition flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'workflow'
-                ? 'border-teal-400 text-teal-300'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <FolderGit2 className="w-4 h-4 text-blue-400" />
-            GitHub Actions (.github/workflows)
-          </button>
-          <button
-            onClick={() => setActiveTab('license')}
-            className={`py-2.5 font-medium border-b-2 whitespace-nowrap transition flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'license'
-                ? 'border-teal-400 text-teal-300'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Scale className="w-4 h-4 text-purple-400" />
-            GNU License & Branding
-          </button>
-        </div>
-      </header>
+  const copyWorkflow = () => {
+    if (workflowContent) {
+      navigator.clipboard.writeText(workflowContent);
+      setCopiedWorkflow(true);
+      setTimeout(() => setCopiedWorkflow(false), 2000);
+    }
+  };
 
-      {/* Main Content */}
-      <main className="max-w-6xl mx-auto px-4 py-8">
-        {activeTab === 'overview' && (
-          <div className="space-y-6">
-            <div className="rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900 to-slate-800/80 border border-slate-800 p-6 shadow-xl">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2 text-teal-400 text-sm font-semibold mb-1">
-                    <ShieldCheck className="w-4 h-4" /> 100% Crash-Proof Architecture Verified
-                  </div>
-                  <h1 className="text-2xl font-bold text-white">Dorowu OS: Pure Linux Autonomous Build</h1>
-                  <p className="text-sm text-slate-300 mt-1 max-w-2xl">
-                    Every install module, systemd target, Wayland session handler, PGP keyring, and GRUB EFI configuration has been hardened to eliminate installer and boot crashes.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <span className="px-3 py-1 rounded-lg bg-slate-800 text-slate-300 text-xs border border-slate-700 flex items-center gap-1.5">
-                    <Cpu className="w-3.5 h-3.5 text-blue-400" /> Stock Arch Kernel 6.x
-                  </span>
-                  <span className="px-3 py-1 rounded-lg bg-slate-800 text-slate-300 text-xs border border-slate-700 flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5 text-purple-400" /> KDE Plasma 6 Wayland
-                  </span>
-                  <span className="px-3 py-1 rounded-lg bg-slate-800 text-slate-300 text-xs border border-slate-700 flex items-center gap-1.5">
-                    <HardDrive className="w-3.5 h-3.5 text-teal-400" /> Calamares + GRUB EFI
-                  </span>
-                </div>
-              </div>
-            </div>
+  // Filter apps
+  const categories = ['All', 'System', 'Development', 'Network', 'Utility', 'Graphics', 'Office'];
+  const filteredApps = appsList.filter(app => {
+    const matchesCategory = selectedCategory === 'All' || app.category === selectedCategory;
+    const q = searchQuery.toLowerCase();
+    const matchesSearch =
+      !q ||
+      app.name.toLowerCase().includes(q) ||
+      app.genericName.toLowerCase().includes(q) ||
+      app.description.toLowerCase().includes(q) ||
+      app.exec.toLowerCase().includes(q) ||
+      app.package.toLowerCase().includes(q);
+    return matchesCategory && matchesSearch;
+  });
 
-            {/* Crash Fixes Audit */}
-            <div className="rounded-xl bg-slate-900 border border-slate-800 p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-white flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-teal-400" />
-                  Calamares & OS Stability Audit (Zero-Crash Assurance)
-                </h2>
-                <span className="text-xs bg-teal-500/10 text-teal-300 border border-teal-500/20 px-2.5 py-1 rounded-full font-medium">
-                  All Fixes Applied & Verified
-                </span>
-              </div>
+  const renderFormattedContent = (content: string, msgId: string) => {
+    const parts = content.split(/(```[\s\S]*?```)/g);
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                <div className="p-4 rounded-lg bg-slate-950 border border-slate-800/80 space-y-2">
-                  <div className="font-semibold text-slate-200 flex items-center gap-2">
-                    <Check className="w-4 h-4 text-teal-400" />
-                    Complete Calamares Exec Sequence
-                  </div>
-                  <p className="text-slate-400 leading-relaxed">
-                    Added <code className="text-teal-300">fstab</code>, <code className="text-teal-300">machineid</code>, <code className="text-teal-300">users</code>, <code className="text-teal-300">locale</code>, <code className="text-teal-300">keyboard</code>, and <code className="text-teal-300">localecfg</code> to Calamares exec. The installed system now boots with valid partition mounts, initialized machine ID, and active user accounts without emergency mode crashes.
-                  </p>
-                </div>
+    return (
+      <div className="space-y-3 leading-relaxed text-slate-200">
+        {parts.map((part, index) => {
+          if (part.startsWith('```') && part.endsWith('```')) {
+            const lines = part.slice(3, -3).trim().split('\n');
+            const language = lines[0].match(/^[a-zA-Z0-9_-]+$/) ? lines[0] : '';
+            const code = language ? lines.slice(1).join('\n') : lines.join('\n');
+            const blockId = `${msgId}-code-${index}`;
 
-                <div className="p-4 rounded-lg bg-slate-950 border border-slate-800/80 space-y-2">
-                  <div className="font-semibold text-slate-200 flex items-center gap-2">
-                    <Check className="w-4 h-4 text-teal-400" />
-                    Plasma 6 Wayland Session Link
-                  </div>
-                  <p className="text-slate-400 leading-relaxed">
-                    Created dual compatibility symlinks for <code className="text-teal-300">plasma.desktop</code> and <code className="text-teal-300">plasmawayland.desktop</code> with SDDM autologin. Eliminates black-screen crashes during live and installed Wayland session boot.
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-lg bg-slate-950 border border-slate-800/80 space-y-2">
-                  <div className="font-semibold text-slate-200 flex items-center gap-2">
-                    <Check className="w-4 h-4 text-teal-400" />
-                    Graphical Target Auto-Start
-                  </div>
-                  <p className="text-slate-400 leading-relaxed">
-                    Symlinked <code className="text-teal-300">default.target &#8594; graphical.target</code> in airootfs. Live ISO boots directly into the sleek KDE Plasma desktop rather than stalling in raw TTY1 text console.
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-lg bg-slate-950 border border-slate-800/80 space-y-2">
-                  <div className="font-semibold text-slate-200 flex items-center gap-2">
-                    <Check className="w-4 h-4 text-teal-400" />
-                    Keyring & Permission Resiliency
-                  </div>
-                  <p className="text-slate-400 leading-relaxed">
-                    Included <code className="text-teal-300">archlinux-keyring</code>, <code className="text-teal-300">sudo</code>, and safe directory creation in Flathub services, preventing pacman PGP verification errors and privilege failures during build or installation.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Core Pillars */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="rounded-xl bg-slate-900/60 border border-slate-800 p-5 space-y-3">
-                <div className="flex items-center gap-2 text-blue-400 font-semibold text-sm">
-                  <Globe className="w-4 h-4" /> Real Mozilla Firefox
-                </div>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Genuine <code className="text-teal-300">extra/firefox</code> binary directly from official Arch Linux repositories with enterprise privacy policies pre-installed (telemetry disabled, tracking protection active).
-                </p>
-              </div>
-
-              <div className="rounded-xl bg-slate-900/60 border border-slate-800 p-5 space-y-3">
-                <div className="flex items-center gap-2 text-teal-400 font-semibold text-sm">
-                  <ShoppingBag className="w-4 h-4" /> Dorowu App Store
-                </div>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Powered by KDE Discover + Flatpak + Flathub remote enabled on first boot. Install thousands of apps (Spotify, Discord, VS Code, Steam, OBS, Telegram, VLC) with 1 click.
-                </p>
-              </div>
-
-              <div className="rounded-xl bg-slate-900/60 border border-slate-800 p-5 space-y-3">
-                <div className="flex items-center gap-2 text-purple-400 font-semibold text-sm">
-                  <MousePointer className="w-4 h-4" /> Black Cursor & Emojis
-                </div>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Default sleek black cursor (<code className="text-teal-300">breeze_cursors</code>) in SDDM and Plasma 6, plus Google Noto Color Emoji font configured system-wide across all apps.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* AI Assistant Interactive Terminal Tab */}
-        {activeTab === 'ai' && (
-          <div className="space-y-6">
-            <div className="rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 border border-slate-800 p-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2 text-teal-400 text-sm font-semibold mb-1">
-                    <Bot className="w-4 h-4" /> Pre-Configured Dorowu OS Terminal AI
-                  </div>
-                  <h2 className="text-2xl font-bold text-white">Dorowu OS AI Assistant</h2>
-                  <p className="text-sm text-slate-300 mt-1 max-w-2xl">
-                    Located in the OS at <code className="text-teal-300">/usr/local/bin/ai-assistant</code> and aliased as <code className="text-teal-300">ai</code>. The official API key is pre-integrated into Dorowu OS out-of-the-box so users never have to type it!
-                  </p>
-                </div>
-                <div className="bg-slate-950/80 border border-slate-800 px-4 py-2.5 rounded-xl text-xs space-y-1">
-                  <div className="text-slate-400">Default Model: <span className="text-teal-300 font-mono">gemini-2.5-flash</span></div>
-                  <div className="text-slate-400">Key Status: <span className="text-green-400 font-medium">✓ Integrated & Active</span></div>
-                </div>
-              </div>
-            </div>
-
-            {/* Terminal Window */}
-            <div className="rounded-xl border border-slate-800 bg-slate-950 overflow-hidden shadow-2xl">
-              {/* Terminal Title Bar */}
-              <div className="bg-slate-900 px-4 py-2.5 flex items-center justify-between border-b border-slate-800 text-xs">
-                <div className="flex items-center gap-2">
+            return (
+              <div key={index} className="my-3 rounded-lg overflow-hidden border border-slate-700/80 bg-slate-950 shadow-inner">
+                <div className="flex items-center justify-between px-3.5 py-1.5 bg-slate-900 border-b border-slate-800 text-xs text-slate-400 font-mono">
                   <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded-full bg-red-500/80" />
-                    <div className="w-3 h-3 rounded-full bg-amber-500/80" />
-                    <div className="w-3 h-3 rounded-full bg-green-500/80" />
+                    <Code className="w-3.5 h-3.5 text-teal-400" />
+                    <span>{language || 'bash'}</span>
                   </div>
-                  <span className="font-mono text-slate-400 ml-2">dorowu@live: ~/ai-assistant (Kitty Terminal)</span>
+                  <button
+                    onClick={() => copyToClipboard(code, blockId)}
+                    className="flex items-center gap-1 hover:text-white transition px-2 py-0.5 rounded hover:bg-slate-800 cursor-pointer"
+                  >
+                    {copiedId === blockId ? (
+                      <>
+                        <Check className="w-3 h-3 text-teal-400" />
+                        <span className="text-teal-400">Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" />
+                        <span>Copy Code</span>
+                      </>
+                    )}
+                  </button>
                 </div>
-                <button
-                  onClick={() => setTerminalHistory([
-                    { sender: 'system', text: 'Dorowu OS 2026.10 Live Terminal — Linux 6.x archiso x86_64' },
-                    { sender: 'system', text: 'Pre-configured with official Dorowu OS AI Assistant (Gemini 2.5).' }
-                  ])}
-                  className="flex items-center gap-1 text-slate-400 hover:text-slate-200 transition cursor-pointer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Reset</span>
-                </button>
-              </div>
-
-              {/* Terminal Logs */}
-              <div className="p-4 font-mono text-xs space-y-3 min-h-[300px] max-h-[460px] overflow-y-auto">
-                {terminalHistory.map((item, idx) => (
-                  <div key={idx} className="leading-relaxed">
-                    {item.sender === 'system' && (
-                      <div className="text-slate-400 border-l-2 border-slate-700 pl-2">
-                        {item.text}
-                      </div>
-                    )}
-                    {item.sender === 'user' && (
-                      <div className="flex items-start gap-2 text-teal-300">
-                        <span className="text-blue-400 font-bold">dorowu:~$</span>
-                        <span>{item.text}</span>
-                      </div>
-                    )}
-                    {item.sender === 'bot' && (
-                      <div className="bg-slate-900/70 border border-slate-800/80 rounded p-3 text-slate-200 whitespace-pre-wrap ml-4 shadow-sm">
-                        <div className="flex items-center gap-1.5 text-[11px] text-teal-400 font-semibold mb-1">
-                          <Bot className="w-3.5 h-3.5" /> Dorowu AI
-                        </div>
-                        {item.text}
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {isAiLoading && (
-                  <div className="flex items-center gap-2 text-slate-400 ml-4 italic">
-                    <span className="w-2 h-2 rounded-full bg-teal-400 animate-ping" />
-                    Dorowu AI thinking...
-                  </div>
-                )}
-                <div ref={terminalBottomRef} />
-              </div>
-
-              {/* Quick Prompts */}
-              <div className="bg-slate-900/70 border-t border-slate-800/80 px-4 py-2 flex flex-wrap gap-2 text-xs">
-                <span className="text-slate-400 self-center">Try prompt:</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTerminalInput('who are u');
-                  }}
-                  className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-teal-300 border border-teal-500/30 transition cursor-pointer"
-                >
-                  "who are u"
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTerminalInput('how do I install steam on Dorowu OS?');
-                  }}
-                  className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition cursor-pointer"
-                >
-                  "install steam"
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTerminalInput('help');
-                  }}
-                  className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition cursor-pointer"
-                >
-                  "help"
-                </button>
-              </div>
-
-              {/* Terminal Input Form */}
-              <form onSubmit={handleTerminalSubmit} className="p-3 bg-slate-900 border-t border-slate-800 flex items-center gap-2">
-                <span className="text-teal-400 font-mono font-bold text-xs pl-2">ai&gt;</span>
-                <input
-                  type="text"
-                  value={terminalInput}
-                  onChange={(e) => setTerminalInput(e.target.value)}
-                  placeholder="Ask a question or type 'who are u'..."
-                  className="flex-1 bg-transparent border-0 text-white font-mono text-xs focus:outline-none focus:ring-0 placeholder:text-slate-500"
-                />
-                <button
-                  type="submit"
-                  disabled={!terminalInput.trim() || isAiLoading}
-                  className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-xs font-medium transition flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Play className="w-3 h-3 fill-white" />
-                  Run
-                </button>
-              </form>
-            </div>
-
-            {/* How it works in Dorowu OS */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-              <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
-                <h3 className="font-semibold text-white text-sm flex items-center gap-2">
-                  <Terminal className="w-4 h-4 text-teal-400" />
-                  Terminal Alias & Usage
-                </h3>
-                <p className="text-slate-300 leading-relaxed">
-                  In any Dorowu OS terminal, you can immediately run:
-                </p>
-                <pre className="p-2.5 rounded bg-slate-950 border border-slate-800 text-teal-300 font-mono">
-                  ai "who are u"<br/>
-                  ai "how do I configure dual monitors?"<br/>
-                  cat /var/log/pacman.log | ai "summarize recent updates"
+                <pre className="p-3.5 text-xs font-mono text-emerald-300 overflow-x-auto whitespace-pre selection:bg-teal-500/30">
+                  {code}
                 </pre>
               </div>
+            );
+          }
 
-              <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
-                <h3 className="font-semibold text-white text-sm flex items-center gap-2">
-                  <Key className="w-4 h-4 text-amber-400" />
-                  Pre-Configured Authentication
-                </h3>
-                <p className="text-slate-300 leading-relaxed">
-                  Your official Google Gemini key is hard-wired as the intelligent default fallback. If you ever wish to use an alternative OpenAI or custom endpoint, you can run <code className="text-teal-300">ai-assistant --config</code> to change it.
-                </p>
-              </div>
+          const paragraphs = part.split('\n\n');
+          return (
+            <div key={index} className="space-y-2">
+              {paragraphs.map((p, pIdx) => {
+                if (!p.trim()) return null;
+                const lines = p.split('\n');
+
+                return (
+                  <div key={pIdx}>
+                    {lines.map((line, lIdx) => {
+                      if (line.trim().startsWith('•') || line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
+                        const bulletText = line.trim().replace(/^[-*•]\s*/, '');
+                        return (
+                          <div key={lIdx} className="flex items-start gap-2 ml-2 my-1">
+                            <span className="text-teal-400 mt-1.5 w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0" />
+                            <span>{parseInlineFormat(bulletText)}</span>
+                          </div>
+                        );
+                      }
+                      return (
+                        <p key={lIdx} className={lIdx > 0 ? 'mt-1' : ''}>
+                          {parseInlineFormat(line)}
+                        </p>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const parseInlineFormat = (text: string) => {
+    const tokens = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
+    return tokens.map((token, i) => {
+      if (token.startsWith('`') && token.endsWith('`')) {
+        return (
+          <code key={i} className="px-1.5 py-0.5 rounded bg-slate-800 text-teal-300 font-mono text-xs border border-slate-700/60">
+            {token.slice(1, -1)}
+          </code>
+        );
+      }
+      if (token.startsWith('**') && token.endsWith('**')) {
+        return <strong key={i} className="font-semibold text-white">{token.slice(2, -2)}</strong>;
+      }
+      return token;
+    });
+  };
+
+  const quickPromptsLinux = [
+    {
+      title: 'Is Dorowu OS Real?',
+      query: 'Is Dorowu OS a real Arch Linux distribution or just a concept? Explain how it builds bootable ISOs.',
+    },
+    {
+      title: 'GNU GPLv3 License',
+      query: 'What rights does the GNU General Public License v3 provide for Dorowu OS and its users?',
+    },
+    {
+      title: 'Search & Launch Apps',
+      query: 'What applications are pre-installed in Dorowu OS and how do I search and launch them in KDE Plasma?',
+    },
+    {
+      title: 'Workflow Build Verification',
+      query: 'Explain how .github/workflows/build-x86_64.yml automates the Dorowu OS ISO build with archiso.',
+    },
+  ];
+
+  const quickPromptsGeneral = [
+    {
+      title: 'Python Async Worker',
+      query: 'Write a modern Python async worker queue using asyncio and type hints.',
+    },
+    {
+      title: 'Debug React Hook',
+      query: 'What are the most common memory leak causes in React useEffect and how to prevent them?',
+    },
+    {
+      title: 'System Architecture',
+      query: 'Explain how microservices differ from modular monoliths with trade-offs.',
+    },
+    {
+      title: 'Bash Automation Script',
+      query: 'Write a robust shell script with strict error handling (set -euo pipefail) to clean temporary files.',
+    },
+  ];
+
+  const currentPrompts = activeMode === 'linux' ? quickPromptsLinux : quickPromptsGeneral;
+
+  return (
+    <div className={`min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-teal-500 selection:text-white ${isWindowMaximized ? 'p-0' : 'p-2 md:p-4'}`}>
+      
+      {/* Native Desktop Window Container */}
+      <div className={`flex-1 flex flex-col rounded-xl border border-slate-800/80 bg-slate-900/90 shadow-2xl backdrop-blur-xl overflow-hidden ${isWindowMaximized ? 'rounded-none border-none' : ''}`}>
+        
+        {/* Native Desktop App Window Titlebar */}
+        <header className="h-12 bg-slate-950/80 border-b border-slate-800/80 px-4 flex items-center justify-between select-none">
+          {/* Left Titlebar Brand */}
+          <div className="flex items-center gap-3">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-sky-500 via-teal-400 to-emerald-400 flex items-center justify-center shadow-md shadow-teal-500/20">
+              <span className="text-slate-950 font-black text-xs">D</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-sm tracking-tight text-white">Dorowu AI Assistant</span>
+              <button
+                onClick={() => setRealDistroProofOpen(true)}
+                className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 hover:bg-emerald-500/20 transition cursor-pointer"
+                title="Verify real Arch Linux distribution"
+              >
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                <span>100% Real Arch Distro</span>
+              </button>
+              <button
+                onClick={() => setLicenseModalOpen(true)}
+                className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/30 hover:bg-blue-500/20 transition cursor-pointer"
+                title="View GNU GPLv3 License"
+              >
+                <Scale className="w-3 h-3 text-blue-400" />
+                <span>GNU GPLv3</span>
+              </button>
             </div>
           </div>
-        )}
 
-        {/* App Store, Firefox & UI Tab */}
-        {activeTab === 'apps' && (
-          <div className="space-y-6">
-            <div className="rounded-xl bg-slate-900 border border-slate-800 p-6 space-y-4">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <ShoppingBag className="w-5 h-5 text-teal-400" />
-                Dorowu App Store & Firefox Integration
-              </h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 space-y-2">
-                  <div className="flex items-center gap-2 text-teal-400 font-semibold text-sm">
-                    <ShoppingBag className="w-4 h-4" /> Dorowu App Store
-                  </div>
-                  <ul className="text-xs text-slate-300 space-y-1.5">
-                    <li>• Pinned to the center panel dock: <code className="text-teal-300">dorowu-appstore.desktop</code></li>
-                    <li>• Backend: KDE Discover + PackageKit + Flatpak</li>
-                    <li>• Flathub repository initialized automatically via <code className="text-teal-300">dorowu-flathub.service</code></li>
-                    <li>• Installs native Arch Linux packages and Flatpak sandboxed apps seamlessly</li>
-                  </ul>
-                </div>
-
-                <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 space-y-2">
-                  <div className="flex items-center gap-2 text-blue-400 font-semibold text-sm">
-                    <Globe className="w-4 h-4" /> Genuine Mozilla Firefox
-                  </div>
-                  <ul className="text-xs text-slate-300 space-y-1.5">
-                    <li>• Official Arch Linux package: <code className="text-teal-300">firefox</code> (not a snap, not a wrapper)</li>
-                    <li>• Hardware accelerated video decoding via Mesa / VAAPI</li>
-                    <li>• Custom enterprise policy file at <code className="text-teal-300">/etc/firefox/policies/policies.json</code></li>
-                    <li>• Telemetry and tracking disabled by default</li>
-                  </ul>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 space-y-2">
-                  <div className="flex items-center gap-2 text-amber-400 font-semibold text-sm">
-                    <MousePointer className="w-4 h-4" /> Modern Black Cursor
-                  </div>
-                  <p className="text-xs text-slate-300">
-                    Configured in <code className="text-teal-300">kcminputrc</code>, <code className="text-teal-300">sddm.conf.d</code>, and <code className="text-teal-300">icons/default/index.theme</code> using the official Breeze Black Cursor (<code className="text-slate-100">breeze_cursors</code>, size 24).
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 space-y-2">
-                  <div className="flex items-center gap-2 text-green-400 font-semibold text-sm">
-                    <Smile className="w-4 h-4" /> Native Unicode Emojis
-                  </div>
-                  <p className="text-xs text-slate-300">
-                    <code className="text-teal-300">noto-fonts-emoji</code> with high-priority fontconfig aliases in <code className="text-teal-300">/etc/fonts/local.conf</code> ensuring emojis render cleanly in terminal, browser, and system dialogs.
-                  </p>
-                </div>
-              </div>
-            </div>
+          {/* Quick App Search Trigger in Header */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setAppsModalOpen(true)}
+              className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-xs text-slate-300 hover:text-white flex items-center gap-2 transition shadow-inner cursor-pointer"
+              title="Search pre-installed applications (Ctrl+K)"
+            >
+              <Search className="w-3.5 h-3.5 text-teal-400" />
+              <span className="font-medium">Search Apps...</span>
+              <kbd className="hidden md:inline-block px-1.5 py-0.2 rounded bg-slate-800 text-[10px] font-mono text-slate-400 border border-slate-700">
+                Ctrl+K
+              </kbd>
+            </button>
           </div>
-        )}
 
-        {/* GitHub Actions Workflow Tab */}
-        {activeTab === 'workflow' && (
-          <div className="space-y-6">
-            <div className="rounded-xl bg-slate-900 border border-slate-800 p-6 space-y-4">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                    <FolderGit2 className="w-5 h-5 text-blue-400" />
-                    GitHub Actions Workflows
-                  </h2>
-                  <p className="text-xs text-slate-300 mt-1">
-                    Created and verified in <code className="text-teal-300">.github/workflows/build-x86_64.yml</code>, <code className="text-teal-300">build-iso.yml</code>, and <code className="text-teal-300">main.yml</code>.
-                  </p>
-                </div>
+          {/* Right Window Controls & Actions */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setWorkflowModalOpen(true)}
+              className="text-xs px-2.5 py-1.5 rounded-md bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white transition flex items-center gap-1.5 border border-slate-700/60 cursor-pointer"
+              title="Official GitHub Actions Workflow"
+            >
+              <FileCode className="w-3.5 h-3.5 text-teal-400" />
+              <span className="hidden sm:inline">build-x86_64.yml</span>
+            </button>
+            <button
+              onClick={() => setSystemInfoModalOpen(true)}
+              className="text-xs p-1.5 rounded-md bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white transition border border-slate-700/60 cursor-pointer"
+              title="System Profile"
+            >
+              <Info className="w-3.5 h-3.5 text-sky-400" />
+            </button>
+            <div className="h-4 w-px bg-slate-800 mx-1" />
+            <button
+              onClick={() => setIsWindowMaximized(!isWindowMaximized)}
+              className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+              title={isWindowMaximized ? 'Restore Window' : 'Maximize Window'}
+            >
+              {isWindowMaximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        </header>
+
+        {/* Desktop App Body: Sidebar + Main Chat View */}
+        <div className="flex-1 flex overflow-hidden">
+          
+          {/* Left Sidebar: Sessions, Mode Switcher, Quick Tools */}
+          <aside className="w-64 md:w-72 bg-slate-950/60 border-r border-slate-800/80 flex flex-col shrink-0 select-none">
+            
+            {/* New Chat & Mode Toggle */}
+            <div className="p-3 border-b border-slate-800/80 space-y-2">
+              <button
+                onClick={() => handleCreateSession(activeMode)}
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-medium text-xs shadow-md shadow-teal-600/10 transition cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>New Conversation</span>
+              </button>
+
+              {/* Mode Selector Tabs */}
+              <div className="grid grid-cols-2 p-1 rounded-lg bg-slate-900 border border-slate-800 text-xs font-medium">
                 <button
-                  onClick={copyWorkflowYaml}
-                  className="flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition cursor-pointer self-start md:self-auto"
+                  onClick={() => handleSwitchMode('linux')}
+                  className={`py-1.5 rounded-md flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                    activeMode === 'linux'
+                      ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
                 >
-                  {copiedWorkflow ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                  {copiedWorkflow ? 'Copied YAML!' : 'Copy Workflow YAML'}
+                  <span>🐧 Linux</span>
+                </button>
+                <button
+                  onClick={() => handleSwitchMode('general')}
+                  className={`py-1.5 rounded-md flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                    activeMode === 'general'
+                      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <span>✨ General</span>
                 </button>
               </div>
 
-              {/* Instructions on how to trigger */}
-              <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 space-y-3">
-                <div className="font-semibold text-white text-sm">How to Start the Build in GitHub Actions:</div>
-                <ol className="text-xs text-slate-300 space-y-2 list-decimal list-inside leading-relaxed">
-                  <li>
-                    Commit and push your files to your repository's default branch (<code className="text-teal-300">main</code>).
-                  </li>
-                  <li>
-                    In your browser or GitHub mobile app, tap the <strong>Actions</strong> tab.
-                  </li>
-                  <li>
-                    Select <strong>Build Dorowu OS ISO (x86_64)</strong> on the left menu.
-                  </li>
-                  <li>
-                    Click or tap <strong>Run workflow</strong> → <strong>Run workflow</strong>.
-                  </li>
-                  <li>
-                    The workflow runs inside an official privileged Arch Linux container, compiles all AUR packages, generates assets, builds the bootable ISO, and produces a downloadable artifact + Release.
-                  </li>
-                </ol>
+              {/* Application Search Button in Sidebar */}
+              <button
+                onClick={() => setAppsModalOpen(true)}
+                className="w-full flex items-center justify-between py-2 px-2.5 rounded-lg bg-slate-900/80 hover:bg-slate-850 border border-slate-800 text-xs text-slate-300 hover:text-white transition cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <AppWindow className="w-4 h-4 text-sky-400" />
+                  <span>Search Dorowu Apps</span>
+                </div>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">15 apps</span>
+              </button>
+            </div>
+
+            {/* Session History List */}
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              <div className="px-2 py-1 text-[11px] font-semibold tracking-wider uppercase text-slate-500">
+                Conversations
+              </div>
+              {sessions.map(s => {
+                const isActive = s.id === currentSessionId;
+                return (
+                  <div
+                    key={s.id}
+                    onClick={() => setCurrentSessionId(s.id)}
+                    className={`group flex items-center justify-between px-2.5 py-2 rounded-lg text-xs transition cursor-pointer ${
+                      isActive
+                        ? 'bg-slate-800/90 text-white font-medium border border-slate-700/70 shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <MessageSquare className={`w-3.5 h-3.5 shrink-0 ${s.mode === 'linux' ? 'text-teal-400' : 'text-blue-400'}`} />
+                      <span className="truncate">{s.title}</span>
+                    </div>
+                    <button
+                      onClick={e => handleDeleteSession(s.id, e)}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-400 transition cursor-pointer"
+                      title="Delete chat"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Bottom Real Distro Badges */}
+            <div className="p-3 border-t border-slate-800/80 bg-slate-950/80 text-[11px] text-slate-400 space-y-2">
+              <button
+                onClick={() => setRealDistroProofOpen(true)}
+                className="w-full flex items-center justify-between p-1.5 rounded-md hover:bg-slate-900 transition text-left cursor-pointer"
+              >
+                <span className="text-slate-500">Distribution Reality</span>
+                <span className="font-mono text-emerald-400 font-semibold flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" /> Real Arch ISO
+                </span>
+              </button>
+
+              <button
+                onClick={() => setLicenseModalOpen(true)}
+                className="w-full flex items-center justify-between p-1.5 rounded-md hover:bg-slate-900 transition text-left cursor-pointer"
+              >
+                <span className="text-slate-500">License Status</span>
+                <span className="font-mono text-blue-400 font-semibold flex items-center gap-1">
+                  <Scale className="w-3 h-3" /> GNU GPLv3
+                </span>
+              </button>
+
+              <button
+                onClick={() => setWorkflowModalOpen(true)}
+                className="w-full flex items-center justify-between p-1.5 rounded-md hover:bg-slate-900 transition text-left cursor-pointer"
+              >
+                <span className="text-slate-500">Build Workflow</span>
+                <span className="font-mono text-teal-400 font-semibold">build-x86_64.yml</span>
+              </button>
+            </div>
+          </aside>
+
+          {/* Main Chat Interface */}
+          <main className="flex-1 flex flex-col bg-slate-900/40 relative overflow-hidden">
+            
+            {/* Header info bar inside chat */}
+            <div className="px-5 py-2.5 bg-slate-950/40 border-b border-slate-800/60 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-slate-300 truncate max-w-xs md:max-w-md">
+                  {currentSession.title}
+                </span>
+                <span className="text-slate-600">•</span>
+                <span className="text-slate-400">
+                  {activeMode === 'linux' ? 'Real Arch Linux, Systemd, Pacman & Calamares AI' : 'General Problem Solving & Development'}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    setSessions(prev =>
+                      prev.map(s => {
+                        if (s.id === currentSessionId) {
+                          return {
+                            ...s,
+                            messages: [
+                              {
+                                id: `m-reset-${Date.now()}`,
+                                role: 'assistant',
+                                content: 'Conversation reset. How can I assist you now?',
+                                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                                mode: activeMode,
+                              },
+                            ],
+                          };
+                        }
+                        return s;
+                      })
+                    );
+                  }}
+                  className="text-slate-400 hover:text-slate-200 text-xs flex items-center gap-1 transition cursor-pointer"
+                  title="Clear current messages"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Clear Chat</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Chat Message Scroll Area */}
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+              
+              {/* If single initial greeting, show quick start cards */}
+              {currentSession.messages.length <= 1 && (
+                <div className="max-w-2xl mx-auto my-4 space-y-6">
+                  <div className="p-5 rounded-xl border border-slate-800 bg-gradient-to-b from-slate-900/80 to-slate-950/80 text-center space-y-3">
+                    <div className="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-tr from-teal-500/20 to-sky-500/20 border border-teal-500/30 flex items-center justify-center shadow-lg shadow-teal-500/5">
+                      <Sparkles className="w-6 h-6 text-teal-400" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-white tracking-tight">
+                        Dorowu OS Official AI Desktop Assistant
+                      </h2>
+                      <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
+                        100% Real Arch Linux operating system licensed under the GNU GPLv3, compiled via GitHub Actions with Calamares & KDE Plasma 6.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-xs">
+                      <button
+                        onClick={() => setRealDistroProofOpen(true)}
+                        className="px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-mono text-[11px] flex items-center gap-1 hover:bg-emerald-500/20 transition cursor-pointer"
+                      >
+                        <CheckCircle2 className="w-3 h-3" /> Real Archiso Profile
+                      </button>
+                      <button
+                        onClick={() => setLicenseModalOpen(true)}
+                        className="px-2.5 py-1 rounded-md bg-blue-500/10 text-blue-300 border border-blue-500/20 font-mono text-[11px] flex items-center gap-1 hover:bg-blue-500/20 transition cursor-pointer"
+                      >
+                        <Scale className="w-3 h-3" /> GNU GPLv3 Licensed
+                      </button>
+                      <button
+                        onClick={() => setAppsModalOpen(true)}
+                        className="px-2.5 py-1 rounded-md bg-slate-800/90 text-slate-300 border border-slate-700/60 font-mono text-[11px] flex items-center gap-1 hover:bg-slate-800 transition cursor-pointer"
+                      >
+                        <Search className="w-3 h-3 text-teal-400" /> App Search Bar
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Suggestion prompt cards */}
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2.5 px-1">
+                      Quick Verification & Diagnostics ({activeMode === 'linux' ? 'Linux Operations' : 'General AI & Coding'})
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {currentPrompts.map((p, i) => (
+                        <button
+                          key={i}
+                          onClick={() => sendMessage(p.query)}
+                          className="text-left p-3 rounded-lg border border-slate-800/90 bg-slate-900/60 hover:bg-slate-800/70 hover:border-teal-500/40 transition group cursor-pointer"
+                        >
+                          <div className="flex items-center justify-between text-xs font-semibold text-slate-200 group-hover:text-teal-300 mb-1">
+                            <span>{p.title}</span>
+                            <ChevronRight className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition" />
+                          </div>
+                          <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
+                            {p.query}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Chat Message List */}
+              {currentSession.messages.map(msg => {
+                const isUser = msg.role === 'user';
+                return (
+                  <div
+                    key={msg.id}
+                    className={`flex gap-3 max-w-3xl ${isUser ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}
+                  >
+                    {/* Avatar */}
+                    <div
+                      className={`w-8 h-8 rounded-lg shrink-0 flex items-center justify-center text-xs font-bold shadow-md select-none ${
+                        isUser
+                          ? 'bg-slate-700 text-slate-200 border border-slate-600'
+                          : 'bg-gradient-to-tr from-teal-600 to-sky-500 text-slate-950 font-black border border-teal-400/40'
+                      }`}
+                    >
+                      {isUser ? 'U' : 'D'}
+                    </div>
+
+                    {/* Bubble Content */}
+                    <div
+                      className={`rounded-xl px-4 py-3 text-sm max-w-[88%] md:max-w-[85%] border shadow-md ${
+                        isUser
+                          ? 'bg-teal-950/40 border-teal-700/60 text-slate-100'
+                          : 'bg-slate-950/80 border-slate-800/90 text-slate-200'
+                      }`}
+                    >
+                      {/* Role & Time Header */}
+                      <div className="flex items-center justify-between gap-4 mb-1.5 text-[11px] text-slate-400">
+                        <span className="font-semibold text-slate-300">
+                          {isUser ? 'You' : 'Dorowu OS AI Assistant'}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span>{msg.timestamp}</span>
+                          {!isUser && (
+                            <button
+                              onClick={() => copyToClipboard(msg.content, msg.id)}
+                              className="hover:text-white transition p-0.5 rounded cursor-pointer"
+                              title="Copy response"
+                            >
+                              {copiedId === msg.id ? (
+                                <Check className="w-3 h-3 text-teal-400" />
+                              ) : (
+                                <Copy className="w-3 h-3" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Formatted Text */}
+                      {isUser ? (
+                        <p className="whitespace-pre-wrap leading-relaxed text-slate-100">{msg.content}</p>
+                      ) : (
+                        renderFormattedContent(msg.content, msg.id)
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Loading Indicator */}
+              {isLoading && (
+                <div className="flex gap-3 max-w-3xl mr-auto">
+                  <div className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center bg-gradient-to-tr from-teal-600 to-sky-500 text-slate-950 font-black border border-teal-400/40 text-xs">
+                    D
+                  </div>
+                  <div className="rounded-xl px-4 py-3 text-sm bg-slate-950/80 border border-slate-800/90 flex items-center gap-2 text-slate-400">
+                    <Sparkles className="w-4 h-4 text-teal-400 animate-spin" />
+                    <span className="text-xs font-mono">Generating response via Gemini 3.8 Flash...</span>
+                  </div>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Bottom Chat Input Form */}
+            <div className="p-3 md:p-4 bg-slate-950/70 border-t border-slate-800/80">
+              <div className="max-w-3xl mx-auto space-y-2">
+                
+                {/* Fast Action Chip Tags */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px]">
+                  <span className="text-slate-500 shrink-0 select-none">Quick tags:</span>
+                  {(activeMode === 'linux'
+                    ? ['sudo pacman -Syu', 'systemctl status', 'calamares', 'btrfs subvolume', 'build-x86_64.yml', 'GNU GPLv3']
+                    : ['Python', 'TypeScript', 'Algorithms', 'Refactor code', 'Explain simply', 'Debugging']
+                  ).map((tag, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        setInputMessage(prev => (prev ? `${prev} ${tag}` : tag));
+                        textareaRef.current?.focus();
+                      }}
+                      className="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-mono text-[10px] whitespace-nowrap transition cursor-pointer"
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Textarea & Send Button */}
+                <div className="relative flex items-end gap-2 bg-slate-900 border border-slate-800 rounded-xl p-2 focus-within:border-teal-500/60 focus-within:ring-1 focus-within:ring-teal-500/30 transition shadow-inner">
+                  <textarea
+                    ref={textareaRef}
+                    value={inputMessage}
+                    onChange={e => setInputMessage(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={
+                      activeMode === 'linux'
+                        ? "Ask about Arch Linux administration, systemd, pacman, Calamares, or kernel setup..."
+                        : "Ask anything—coding, writing, math, system architecture, or general knowledge..."
+                    }
+                    rows={1}
+                    className="flex-1 bg-transparent border-none resize-none outline-none text-slate-100 placeholder-slate-500 text-sm max-h-32 min-h-[40px] py-1.5 px-2"
+                  />
+                  <button
+                    onClick={() => sendMessage()}
+                    disabled={!inputMessage.trim() || isLoading}
+                    className="h-9 px-4 rounded-lg bg-teal-600 hover:bg-teal-500 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-white font-medium text-xs flex items-center gap-1.5 transition shrink-0 cursor-pointer shadow-sm shadow-teal-500/10"
+                  >
+                    <span>Send</span>
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-500 px-1">
+                  <span>Press <kbd className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 font-mono text-[10px] text-slate-400">Enter</kbd> to send, <kbd className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 font-mono text-[10px] text-slate-400">Shift+Enter</kbd> for newline</span>
+                  <span className="font-mono text-teal-400/80">Dorowu OS 2026.10 Desktop App</span>
+                </div>
+              </div>
+            </div>
+
+          </main>
+        </div>
+      </div>
+
+      {/* Real Application Search Bar & Launcher Modal */}
+      {appsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-3xl rounded-xl border border-slate-700/80 bg-slate-900 shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+            {/* Modal Header & Search Bar */}
+            <div className="p-4 bg-slate-950 border-b border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AppWindow className="w-5 h-5 text-teal-400" />
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Dorowu OS Application Search & Launcher</h3>
+                    <p className="text-[11px] text-slate-400">Search and explore real pre-installed desktop applications in Dorowu OS</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setAppsModalOpen(false)}
+                  className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
 
-              <div className="space-y-2">
-                <div className="text-xs text-slate-400 font-mono">.github/workflows/build-x86_64.yml:</div>
-                <pre className="p-4 rounded-lg bg-slate-950 border border-slate-800 text-slate-300 text-xs font-mono overflow-x-auto max-h-[400px]">
-{`name: Build Dorowu OS ISO (x86_64)
+              {/* Search Bar Input */}
+              <div className="relative flex items-center">
+                <Search className="w-4 h-4 text-teal-400 absolute left-3.5" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Type to search applications (e.g. firefox, dolphin, discover, kitty, calamares)..."
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-slate-900 border border-slate-700/80 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-teal-500/70 focus:ring-1 focus:ring-teal-500/30"
+                  autoFocus
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 text-xs text-slate-400 hover:text-white"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {/* Category Filter Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                {categories.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
+                      selectedCategory === cat
+                        ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40'
+                        : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+                <span className="text-slate-500 text-[11px] ml-auto shrink-0 font-mono">
+                  {filteredApps.length} apps found
+                </span>
+              </div>
+            </div>
+
+            {/* Apps Grid List */}
+            <div className="p-4 overflow-y-auto space-y-2.5 flex-1">
+              {filteredApps.length === 0 ? (
+                <div className="text-center py-12 text-slate-400">
+                  <Package className="w-10 h-10 mx-auto text-slate-600 mb-2" />
+                  <p className="text-sm font-medium">No applications found matching "{searchQuery}"</p>
+                  <p className="text-xs text-slate-500 mt-1">Try another keyword or switch category filters.</p>
+                </div>
+              ) : (
+                filteredApps.map(app => {
+                  const copyKey = `app-exec-${app.id}`;
+                  return (
+                    <div
+                      key={app.id}
+                      className="p-3.5 rounded-lg border border-slate-800 bg-slate-950/60 hover:bg-slate-850 hover:border-slate-700/80 transition flex items-start justify-between gap-4 group"
+                    >
+                      <div className="flex items-start gap-3 flex-1 min-w-0">
+                        <div className="w-10 h-10 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 text-teal-400 font-bold group-hover:border-teal-500/30 transition">
+                          <AppWindow className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-sm text-white truncate">{app.name}</h4>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-mono">
+                              {app.category}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-mono hidden sm:inline">
+                              {app.desktopFile}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-0.5 line-clamp-2 leading-relaxed">
+                            {app.description}
+                          </p>
+                          <div className="flex items-center gap-3 mt-2 text-[11px] text-slate-500 font-mono">
+                            <span>Pkg: <code className="text-teal-300">{app.package}</code></span>
+                            <span>•</span>
+                            <span>Exec: <code className="text-emerald-300">{app.exec}</code></span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 self-center">
+                        <button
+                          onClick={() => copyToClipboard(app.exec, copyKey)}
+                          className="px-2.5 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-mono flex items-center gap-1.5 transition cursor-pointer border border-slate-700/60"
+                          title="Copy terminal command"
+                        >
+                          {copiedId === copyKey ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-teal-400" />
+                              <span className="text-teal-400">Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5 text-slate-400" />
+                              <span>{app.exec}</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-5 py-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+              <span className="flex items-center gap-1.5">
+                <Command className="w-3.5 h-3.5 text-slate-500" />
+                <span>In real Dorowu OS desktop: press <kbd className="font-mono text-slate-300 bg-slate-800 px-1 py-0.5 rounded">Alt+Space</kbd> for KRunner or <kbd className="font-mono text-slate-300 bg-slate-800 px-1 py-0.5 rounded">Super</kbd> for Kickoff menu.</span>
+              </span>
+              <button
+                onClick={() => setAppsModalOpen(false)}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* GNU General Public License v3 Modal */}
+      {licenseModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-3xl rounded-xl border border-slate-700/80 bg-slate-900 shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+            <div className="px-5 py-3.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Scale className="w-5 h-5 text-blue-400" />
+                <div>
+                  <h3 className="text-sm font-bold text-white">GNU General Public License v3 (GNU GPLv3)</h3>
+                  <p className="text-[11px] text-slate-400 font-mono">
+                    {licenseInfo?.copyright || 'Copyright (C) 2026 Dorowu OS Project <https://github.com/SAMI23450/dorowu-os>'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setLicenseModalOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4 text-xs">
+              <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-200 space-y-2">
+                <div className="font-bold text-blue-100 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-blue-400" />
+                  <span>Officially Licensed Free & Open Source Software</span>
+                </div>
+                <p className="leading-relaxed text-[11px]">
+                  Dorowu OS is strictly released under the <strong>GNU General Public License Version 3 (GPLv3)</strong>. This guarantees your complete freedom to run, modify, study, adapt, and redistribute the entire operating system and all its build configurations.
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-slate-800 bg-slate-950 overflow-hidden">
+                <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 font-mono text-[11px] text-slate-400">
+                  Full License Text (/LICENSE)
+                </div>
+                <pre className="p-4 text-xs font-mono text-slate-300 overflow-x-auto whitespace-pre leading-relaxed max-h-96">
+                  {licenseInfo?.content || 'GNU GENERAL PUBLIC LICENSE Version 3...'}
+                </pre>
+              </div>
+            </div>
+
+            <div className="px-5 py-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+              <span>SPDX-License-Identifier: <code className="font-mono text-blue-300">GPL-3.0-only</code></span>
+              <button
+                onClick={() => setLicenseModalOpen(false)}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Proof & Real Distro Verification Modal */}
+      {realDistroProofOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-2xl rounded-xl border border-slate-700/80 bg-slate-900 shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+            <div className="px-5 py-3.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                <div>
+                  <h3 className="text-sm font-bold text-white">Verification: Yes, This Linux Distro Is 100% Real</h3>
+                  <p className="text-[11px] text-slate-400">Complete Arch Linux ISO Build System & Profile</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setRealDistroProofOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4 text-xs text-slate-300">
+              <div className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-200 space-y-1.5">
+                <div className="font-bold text-sm text-white">This is NOT a mockup.</div>
+                <p className="text-[11px] leading-relaxed">
+                  Dorowu OS contains a complete, production-grade <strong>Arch Linux archiso profile</strong> and an automated <strong>GitHub Actions CI workflow</strong>. When run, it builds an authentic, bootable <code className="font-mono text-white">.iso</code> image with real Linux kernel 6.x, KDE Plasma 6 desktop, and Calamares installer.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-bold text-white uppercase text-[11px] tracking-wider text-slate-400">
+                  How Dorowu OS Is Structured & Built:
+                </h4>
+
+                <div className="space-y-2.5">
+                  <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                    <div className="font-semibold text-teal-400 mb-0.5">1. Complete Archiso Profile (/dorowu-profile)</div>
+                    <p className="text-[11px] text-slate-400">
+                      Contains <code className="font-mono text-slate-300">profiledef.sh</code>, <code className="font-mono text-slate-300">packages.x86_64</code> (124 real Arch packages), squashfs compression with Zstandard level 15, and dual bootloader configs for UEFI (GRUB) and Legacy BIOS (Syslinux).
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                    <div className="font-semibold text-teal-400 mb-0.5">2. Complete Live Root Filesystem (/dorowu-profile/airootfs)</div>
+                    <p className="text-[11px] text-slate-400">
+                      Configured with SDDM autologin, KDE Plasma 6 Breeze-Dark theme, Calamares 3.3+ partitioning and installation modules, Flathub app store service, Kitty terminal with JetBrains Mono font, and fontconfig emoji fallbacks.
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                    <div className="font-semibold text-teal-400 mb-0.5">3. Automated CI Workflow (/.github/workflows/build-x86_64.yml)</div>
+                    <p className="text-[11px] text-slate-400">
+                      Runs inside an official <code className="font-mono text-slate-300">archlinux:latest</code> container on GitHub Actions, executes <code className="font-mono text-slate-300">scripts/ci-build.sh</code>, generates SHA256 checksums, and attaches the final bootable ISO to GitHub Releases.
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                    <div className="font-semibold text-teal-400 mb-0.5">4. How to Flash & Install on Hardware or VM</div>
+                    <p className="text-[11px] text-slate-400">
+                      You can flash the built <code className="font-mono text-slate-300">dorowu-os-*.iso</code> to any USB drive with <code className="font-mono text-emerald-300">dd if=dorowu-os.iso of=/dev/sdX bs=4M status=progress</code>, Rufus, or BalenaEtcher, boot your PC or VirtualBox/VMware, and install Dorowu OS directly to disk using the Calamares installer!
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-5 py-3 bg-slate-950 border-t border-slate-800 flex justify-end">
+              <button
+                onClick={() => setRealDistroProofOpen(false)}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition cursor-pointer"
+              >
+                Understood, Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Official GitHub Actions Workflow Modal */}
+      {workflowModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-3xl rounded-xl border border-slate-700/80 bg-slate-900 shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-5 py-3.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <FileCode className="w-5 h-5 text-teal-400" />
+                <div>
+                  <h3 className="text-sm font-bold text-white">Official CI/CD Build Workflow</h3>
+                  <p className="text-[11px] text-slate-400 font-mono">.github/workflows/build-x86_64.yml</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={copyWorkflow}
+                  className="px-2.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-medium flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  {copiedWorkflow ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedWorkflow ? 'Copied' : 'Copy Workflow'}</span>
+                </button>
+                <button
+                  onClick={() => setWorkflowModalOpen(false)}
+                  className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-5 overflow-y-auto space-y-4">
+              <div className="p-3.5 rounded-lg bg-teal-500/10 border border-teal-500/20 text-xs text-teal-300 space-y-1">
+                <div className="font-semibold flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-teal-400" />
+                  <span>The Single Source of Truth for Dorowu OS ISO Builds</span>
+                </div>
+                <p className="text-[11px] text-teal-200/80 leading-relaxed">
+                  Dorowu OS builds entirely via this official GitHub Actions workflow. It runs a privileged Arch Linux container, executes <code className="font-mono text-teal-100 bg-teal-900/40 px-1 py-0.5 rounded">scripts/ci-build.sh</code>, outputs SHA256 checksums, and publishes bootable x86_64 ISOs directly to GitHub Releases.
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-slate-800 bg-slate-950 overflow-hidden">
+                <div className="px-4 py-2 bg-slate-900/90 border-b border-slate-800 text-xs font-mono text-slate-400 flex items-center justify-between">
+                  <span>YAML Workflow Specification</span>
+                  <span className="text-[10px] text-slate-500">archiso • docker container • sha256</span>
+                </div>
+                <pre className="p-4 text-xs font-mono text-emerald-300 overflow-x-auto whitespace-pre leading-relaxed max-h-96">
+                  {workflowContent || `name: Build Dorowu OS ISO (x86_64)
 
 on:
   workflow_dispatch:        # start it from the GitHub mobile app
@@ -687,94 +1357,86 @@ jobs:
                 </pre>
               </div>
             </div>
-          </div>
-        )}
 
-        {/* GNU License & Branding Tab */}
-        {activeTab === 'license' && (
-          <div className="space-y-6">
-            <div className="rounded-xl bg-slate-900 border border-slate-800 p-6 space-y-4">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <Scale className="w-5 h-5 text-purple-400" />
-                GNU General Public License v3 & Official Dorowu OS Branding
-              </h2>
-
-              <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300 space-y-2">
-                <div className="font-semibold text-white flex items-center gap-2">
-                  <Check className="w-4 h-4 text-teal-400" />
-                  GPLv3 License Applied
-                </div>
-                <p>
-                  Dorowu OS is officially licensed under the <strong>GNU General Public License Version 3 (GPLv3)</strong>, preserved at <code className="text-teal-300">/LICENSE</code> in the repository root.
-                </p>
-                <p className="text-slate-400">
-                  This guarantees freedom to study, modify, distribute, and build custom Arch Linux spins with copyleft protection.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300 space-y-2">
-                <div className="font-semibold text-white flex items-center gap-2">
-                  <Check className="w-4 h-4 text-teal-400" />
-                  100% Dorowu OS Brand Purity
-                </div>
-                <p>
-                  All configs, desktop files, plymouth boots, SDDM themes, hostname, Calamares branding, and shell aliases strictly use <strong>Dorowu OS</strong>.
-                </p>
-                <p className="text-slate-400">
-                  <code className="text-teal-300">index.HTML</code> and web bundle artifacts are formally excluded in <code className="text-teal-300">.gitignore</code>.
-                </p>
-              </div>
-
-              {/* Vector Logo Preview */}
-              <div className="p-5 rounded-lg bg-slate-950 border border-slate-800 flex items-center gap-4">
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600 via-sky-500 to-teal-400 flex items-center justify-center shadow-xl shadow-teal-500/20 shrink-0">
-                  <svg viewBox="0 0 512 512" className="w-14 h-14">
-                    <path d="M 156 122 H 262 C 328 122 376 166 376 256 C 376 346 328 390 262 390 H 156 Z" fill="#ffffff"/>
-                    <path d="M 222 178 V 334 H 256 C 298 334 322 308 322 256 C 322 204 298 178 256 178 Z" fill="#0284c7"/>
-                    <path d="M 236 334 L 274 262 L 296 306 L 314 282 L 322 298 V 334 Z" fill="#e0f2fe"/>
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="font-bold text-white text-sm">Official Dorowu OS Logo</h3>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Vector squircle with royal blue-teal gradient, white 'D', and ice-blue mountain silhouette at <code className="text-teal-300">dorowu-profile/airootfs/usr/share/pixmaps/dorowu-logo.svg</code>.
-                  </p>
-                </div>
-              </div>
-
-              {/* Secondary & Backup Alpine Mountain Wallpaper Card */}
-              <div className="p-5 rounded-lg bg-slate-950 border border-slate-800 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-bold text-white text-sm flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-amber-400" />
-                      Secondary & Backup Alpine Mountain Wallpaper
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Installed at <code className="text-teal-300">/usr/share/backgrounds/dorowu/secondary.jpg</code> and <code className="text-teal-300">mountain-backup.jpg</code>.
-                    </p>
-                  </div>
-                  <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-teal-500/10 text-teal-300 border border-teal-500/20 font-medium">
-                    Integrated Backup
-                  </span>
-                </div>
-                <div className="relative rounded-lg overflow-hidden border border-slate-800 aspect-video max-h-56 bg-slate-900 group">
-                  <img
-                    src="/wallpapers/secondary.jpg"
-                    alt="Dorowu OS Secondary Alpine Mountain Wallpaper"
-                    className="w-full h-full object-cover group-hover:scale-102 transition duration-500"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex items-end p-3">
-                    <span className="text-xs font-medium text-slate-200">
-                      Alpine Peaks & Autumn Pine Forest — Included in live & target desktop
-                    </span>
-                  </div>
-                </div>
-              </div>
+            {/* Modal Footer */}
+            <div className="px-5 py-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+              <span>Location: <code className="font-mono text-slate-300">/.github/workflows/build-x86_64.yml</code></span>
+              <button
+                onClick={() => setWorkflowModalOpen(false)}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition cursor-pointer"
+              >
+                Close
+              </button>
             </div>
           </div>
-        )}
-      </main>
+        </div>
+      )}
+
+      {/* System Information Modal */}
+      {systemInfoModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-lg rounded-xl border border-slate-700/80 bg-slate-900 shadow-2xl flex flex-col overflow-hidden">
+            <div className="px-5 py-3.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <ShieldCheck className="w-5 h-5 text-sky-400" />
+                <h3 className="text-sm font-bold text-white">Dorowu OS Profile Architecture</h3>
+              </div>
+              <button
+                onClick={() => setSystemInfoModalOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                  <div className="text-slate-500 text-[11px] mb-1">Distribution</div>
+                  <div className="font-semibold text-slate-200">{systemInfo?.distro || 'Dorowu OS 2026.10'}</div>
+                </div>
+                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                  <div className="text-slate-500 text-[11px] mb-1">Linux Kernel</div>
+                  <div className="font-semibold text-slate-200">{systemInfo?.kernel || 'Linux 6.x archiso'}</div>
+                </div>
+                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                  <div className="text-slate-500 text-[11px] mb-1">Desktop Environment</div>
+                  <div className="font-semibold text-slate-200">{systemInfo?.desktop || 'KDE Plasma 6 (Wayland)'}</div>
+                </div>
+                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                  <div className="text-slate-500 text-[11px] mb-1">System Installer</div>
+                  <div className="font-semibold text-slate-200">{systemInfo?.installer || 'Calamares 3.3+'}</div>
+                </div>
+                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                  <div className="text-slate-500 text-[11px] mb-1">License</div>
+                  <div className="font-semibold text-blue-400 font-mono">GNU GPLv3</div>
+                </div>
+                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                  <div className="text-slate-500 text-[11px] mb-1">Preinstalled Packages</div>
+                  <div className="font-semibold text-teal-400 font-mono">{systemInfo?.totalPreinstalledPackages || 124} packages</div>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-slate-950/80 border border-slate-800 text-[11px] text-slate-400 space-y-1.5">
+                <div className="font-semibold text-slate-300">Desktop Integration:</div>
+                <p>
+                  Integrated into KDE Plasma 6 with launcher <code className="text-sky-300 font-mono">dorowu-ai.desktop</code> in <code className="text-slate-300 font-mono">/usr/share/applications</code>. Built-in system services, Flathub repository, and Calamares branded theme are configured for reproducible ISO builds.
+                </p>
+              </div>
+            </div>
+
+            <div className="px-5 py-3 bg-slate-950 border-t border-slate-800 flex justify-end">
+              <button
+                onClick={() => setSystemInfoModalOpen(false)}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

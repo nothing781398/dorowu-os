@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Dorowu OS Desktop AI Assistant UI Launcher
+set -euo pipefail
+
+# In desktop session, launch the Dorowu AI Assistant Desktop App UI
+if command -v firefox &>/dev/null; then
+    firefox --new-window "http://localhost:3000" &
+elif command -v xdg-open &>/dev/null; then
+    xdg-open "http://localhost:3000" &
+else
+    echo "Starting Dorowu AI Assistant Desktop Service..."
+fi
