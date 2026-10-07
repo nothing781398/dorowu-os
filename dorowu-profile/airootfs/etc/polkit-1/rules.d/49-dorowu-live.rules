@@ -1,0 +1,6 @@
+/* Allow members of wheel and dorowu user to authenticate without password in live session */
+polkit.addRule(function(action, subject) {
+    if (subject.isInGroup("wheel") || subject.user === "dorowu") {
+        return polkit.Result.YES;
+    }
+});

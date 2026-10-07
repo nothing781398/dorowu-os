@@ -1,1 +1,30 @@
 @import "tailwindcss";
+
+@layer base {
+  :root.theme-light {
+    color-scheme: light;
+  }
+  :root.theme-slate {
+    color-scheme: dark;
+  }
+}
+
+/* High-Contrast Light Mode Enhancements */
+.theme-light {
+  --bg-main: #f1f5f9;
+  --bg-card: #ffffff;
+  --text-main: #020617;
+  --text-muted: #334155;
+  --border-main: #94a3b8;
+}
+
+.theme-light input,
+.theme-light textarea {
+  color: #020617 !important;
+}
+
+.theme-light pre,
+.theme-light code {
+  color-scheme: light;
+}
+

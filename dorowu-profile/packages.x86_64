@@ -13,6 +13,7 @@ which
 grub
 syslinux
 efibootmgr
+memtest86+-efi
 os-prober
 mtools
 squashfs-tools
@@ -23,6 +24,11 @@ yaml-cpp
 boost-libs
 upower
 power-profiles-daemon
+acpid
+brightnessctl
+sof-firmware
+alsa-firmware
+alsa-utils
 
 # --- Complete Filesystem Support ---
 btrfs-progs
@@ -39,15 +45,18 @@ vulkan-intel
 vulkan-radeon
 vulkan-tools
 vulkan-mesa-layers
-libva-mesa-driver
+intel-media-driver
+libva-intel-driver
 xf86-video-amdgpu
 xf86-video-ati
 xf86-video-nouveau
-xf86-video-vmware
 xf86-video-qxl
 xf86-video-vesa
 xf86-video-fbdev
+libinput
+xf86-input-libinput
 open-vm-tools
+virtualbox-guest-utils
 spice-vdagent
 qemu-guest-agent
 xorg-server
@@ -78,13 +87,16 @@ pipewire-alsa
 wireplumber
 pavucontrol
 networkmanager
+wpa_supplicant
+wireless-regdb
+iw
 bluez
 bluez-utils
 bluedevil
 cups
 
 # --- Archive Utilities ---
-p7zip
+7zip
 unzip
 unrar
 tar
