@@ -34,12 +34,22 @@ ntfs-3g
 
 # --- Graphics & Display Drivers ---
 mesa
+mesa-utils
 vulkan-intel
 vulkan-radeon
+vulkan-tools
+vulkan-mesa-layers
 libva-mesa-driver
 xf86-video-amdgpu
 xf86-video-ati
 xf86-video-nouveau
+xf86-video-vmware
+xf86-video-qxl
+xf86-video-vesa
+xf86-video-fbdev
+open-vm-tools
+spice-vdagent
+qemu-guest-agent
 xorg-server
 xorg-xwayland
 qt6-wayland

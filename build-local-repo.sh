@@ -21,7 +21,7 @@ su - "${BUILD_USER}" -c "
   rm -rf /tmp/ckbcomp
   git clone --depth 1 https://aur.archlinux.org/ckbcomp.git /tmp/ckbcomp
   cd /tmp/ckbcomp
-  makepkg -sri --noconfirm --needed
+  makepkg -sri --noconfirm --needed --skippgpcheck
   cp ./*.pkg.tar.zst '${REPO_DIR}/'
 "
 
@@ -31,7 +31,7 @@ su - "${BUILD_USER}" -c "
   rm -rf /tmp/calamares
   git clone --depth 1 https://aur.archlinux.org/calamares.git /tmp/calamares
   cd /tmp/calamares
-  makepkg -s --noconfirm --needed
+  makepkg -s --noconfirm --needed --skippgpcheck
   cp ./*.pkg.tar.zst '${REPO_DIR}/'
 "
 

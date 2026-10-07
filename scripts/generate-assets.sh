@@ -33,20 +33,20 @@ if [[ -f "dorowu-logo-wordmark.svg" ]]; then
     cp "dorowu-logo-wordmark.svg" "${DEST_PIXMAPS}/dorowu-logo-wordmark.svg"
 fi
 
-# 2. Generate PNG raster assets for Calamares & SDDM
-if [[ -f "dorowu-logo-512.png" ]]; then
-    cp "dorowu-logo-512.png" "${DEST_BRAND}/dorowu-logo.png"
-    cp "dorowu-logo-512.png" "${DEST_BRAND}/welcome.png"
-    cp "dorowu-logo-512.png" "${DEST_PIXMAPS}/dorowu-logo.png"
-elif command -v magick &>/dev/null; then
-    magick -background none "${DEST_PIXMAPS}/dorowu-logo.svg" -resize 512x512 "${DEST_BRAND}/dorowu-logo.png" || true
-    magick -background none "${DEST_PIXMAPS}/dorowu-logo.svg" -resize 512x512 "${DEST_BRAND}/welcome.png" || true
-    cp "${DEST_BRAND}/dorowu-logo.png" "${DEST_PIXMAPS}/dorowu-logo.png" || true
+# Find convert command (ImageMagick 7 uses 'magick', ImageMagick 6 uses 'convert')
+CONV_CMD=""
+if command -v magick &>/dev/null; then
+    CONV_CMD="magick"
+elif command -v convert &>/dev/null; then
+    CONV_CMD="convert"
 fi
 
-# 3. Generate high-resolution desktop wallpaper
-if command -v magick &>/dev/null; then
-    magick -size 2560x1440 "gradient:#0d121f-#1a233a" \
+# 2. Generate PNG raster assets for Calamares & SDDM
+python3 scripts/generate_png_assets.py || true
+
+# 3. Generate high-resolution desktop wallpaper with ImageMagick if available
+if [[ -n "${CONV_CMD}" ]]; then
+    ${CONV_CMD} -size 2560x1440 "gradient:#0d121f-#1a233a" \
         \( "${DEST_PIXMAPS}/dorowu-logo.svg" -resize 300x300 \) -gravity center -composite \
         "${DEST_BG}/default.png" || true
 fi

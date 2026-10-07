@@ -1,0 +1,2 @@
+# Enable sudo rights for members of group wheel (created by installer)
+%wheel ALL=(ALL:ALL) ALL
