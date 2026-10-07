@@ -123,6 +123,7 @@ export default function App() {
   const [appsModalOpen, setAppsModalOpen] = useState(false);
   const [licenseModalOpen, setLicenseModalOpen] = useState(false);
   const [realDistroProofOpen, setRealDistroProofOpen] = useState(false);
+  const [vmGuideOpen, setVmGuideOpen] = useState(false);
 
   // App Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -573,6 +574,14 @@ export default function App() {
           {/* Right Window Controls & Actions */}
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setVmGuideOpen(true)}
+              className="text-xs px-2.5 py-1.5 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition flex items-center gap-1.5 border border-emerald-500/30 cursor-pointer"
+              title="VM & Credentials Guide"
+            >
+              <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden sm:inline">VM & Credentials</span>
+            </button>
+            <button
               onClick={() => setWorkflowModalOpen(true)}
               className="text-xs px-2.5 py-1.5 rounded-md bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white transition flex items-center gap-1.5 border border-slate-700/60 cursor-pointer"
               title="Official GitHub Actions Workflow"
@@ -693,6 +702,16 @@ export default function App() {
                 <span className="text-slate-500">Distribution Reality</span>
                 <span className="font-mono text-emerald-400 font-semibold flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3" /> Real Arch ISO
+                </span>
+              </button>
+
+              <button
+                onClick={() => setVmGuideOpen(true)}
+                className="w-full flex items-center justify-between p-1.5 rounded-md hover:bg-slate-900 transition text-left cursor-pointer"
+              >
+                <span className="text-slate-500">Live Login & VM Guide</span>
+                <span className="font-mono text-amber-300 font-semibold flex items-center gap-1">
+                  <Terminal className="w-3 h-3" /> User: dorowu
                 </span>
               </button>
 
@@ -1431,6 +1450,125 @@ jobs:
                 className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs transition cursor-pointer"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VM & Installation Credentials Guide Modal */}
+      {vmGuideOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-2xl rounded-xl border border-slate-700/80 bg-slate-900 shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+            <div className="px-5 py-3.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Terminal className="w-5 h-5 text-emerald-400" />
+                <div>
+                  <h3 className="text-sm font-bold text-white">VirtualBox / VM Setup & Live Credentials</h3>
+                  <p className="text-[11px] text-slate-400">Live Login, VM Troubleshooting & Installation Methods</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setVmGuideOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4 text-xs text-slate-300">
+              
+              {/* Credentials Card */}
+              <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 space-y-2.5">
+                <h4 className="font-bold text-white flex items-center gap-1.5 text-xs">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>Live Environment Credentials</span>
+                </h4>
+                <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+                  <div className="p-2.5 rounded bg-slate-900 border border-slate-800">
+                    <span className="text-slate-500 block text-[10px]">Username</span>
+                    <span className="text-teal-300 font-bold text-sm">dorowu</span>
+                  </div>
+                  <div className="p-2.5 rounded bg-slate-900 border border-slate-800">
+                    <span className="text-slate-500 block text-[10px]">Password</span>
+                    <span className="text-emerald-300 font-bold text-sm">No Password (Blank)</span>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  SDDM autologin automatically boots into the <strong>KDE Plasma 6</strong> desktop. Sudo permissions are passwordless (<code className="text-slate-300 bg-slate-900 px-1 py-0.5 rounded">sudo command</code>). If prompted for a password anywhere, simply leave it blank and press <kbd className="bg-slate-800 px-1 py-0.5 rounded text-white">Enter</kbd>.
+                </p>
+              </div>
+
+              {/* Fix for VirtualBox Error in Screenshot */}
+              <div className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 space-y-2">
+                <h4 className="font-bold text-white flex items-center gap-1.5 text-xs">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>VirtualBox Error Fix (intel-ucode.img... failed)</span>
+                </h4>
+                <p className="text-[11px] leading-relaxed">
+                  <strong>Cause:</strong> In your VirtualBox screenshot, ISOLINUX looked for <code className="font-mono text-white bg-slate-900/60 px-1 py-0.5 rounded">intel-ucode.img</code> as a separate file. In modern Arch Linux, the CPU microcode is already baked directly into <code className="font-mono text-white bg-slate-900/60 px-1 py-0.5 rounded">initramfs-linux.img</code> by <code className="font-mono text-white">mkinitcpio</code>.
+                </p>
+                <p className="text-[11px] leading-relaxed">
+                  <strong>Fix Applied:</strong> Both <code className="font-mono text-white">syslinux.cfg</code> and <code className="font-mono text-white">grub.cfg</code> now load <code className="font-mono text-white">initramfs-linux.img</code> directly. Running the GitHub Actions build produces a bootable ISO that boots into the live KDE desktop without this error.
+                </p>
+              </div>
+
+              {/* VirtualBox Recommended VM Settings */}
+              <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 space-y-2.5">
+                <h4 className="font-bold text-white flex items-center gap-1.5 text-xs">
+                  <Settings className="w-4 h-4 text-sky-400" />
+                  <span>Recommended VirtualBox Machine Settings</span>
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono">
+                  <div className="p-2 rounded bg-slate-900 border border-slate-800/80">
+                    <span className="text-slate-500 block text-[10px]">Type & Version:</span>
+                    <span className="text-slate-200">Linux / Arch Linux (64-bit)</span>
+                  </div>
+                  <div className="p-2 rounded bg-slate-900 border border-slate-800/80">
+                    <span className="text-slate-500 block text-[10px]">RAM (Base Memory):</span>
+                    <span className="text-teal-300 font-bold">4096 MB (4 GB)</span>
+                  </div>
+                  <div className="p-2 rounded bg-slate-900 border border-slate-800/80">
+                    <span className="text-slate-500 block text-[10px]">Processors:</span>
+                    <span className="text-slate-200">2 or more CPU cores</span>
+                  </div>
+                  <div className="p-2 rounded bg-slate-900 border border-slate-800/80">
+                    <span className="text-slate-500 block text-[10px]">Graphics Controller:</span>
+                    <span className="text-sky-300 font-bold">VBoxSVGA (Enable 3D Accel)</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Graphical & Non-Graphical Installation */}
+              <div className="p-4 rounded-lg bg-slate-950 border border-slate-800 space-y-2">
+                <h4 className="font-bold text-white flex items-center gap-1.5 text-xs">
+                  <Download className="w-4 h-4 text-teal-400" />
+                  <span>Graphical & Non-Graphical Installation Options</span>
+                </h4>
+                <div className="space-y-2 text-[11px]">
+                  <div className="p-2.5 rounded bg-slate-900 border border-slate-800">
+                    <span className="font-bold text-teal-300 block mb-0.5">1. Graphical Installation (Calamares)</span>
+                    <span className="text-slate-400">
+                      Double-click the <strong>Install Dorowu OS</strong> icon on the desktop or run <code className="font-mono text-slate-300">sudo -E calamares</code>. Guides you through partitioning (Btrfs/Ext4), timezone, user accounts, and automatically installs the <strong>GRUB</strong> bootloader.
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded bg-slate-900 border border-slate-800">
+                    <span className="font-bold text-sky-300 block mb-0.5">2. Non-Graphical / Base CLI Installation</span>
+                    <span className="text-slate-400">
+                      Since Dorowu OS is genuine Arch Linux, switch to a TTY with <kbd className="bg-slate-800 px-1 py-0.5 rounded text-white">Ctrl+Alt+F3</kbd> or open Kitty terminal. You can use standard Arch Linux tools: <code className="font-mono text-slate-300">fdisk</code>, <code className="font-mono text-slate-300">pacstrap /mnt</code>, <code className="font-mono text-slate-300">genfstab</code>, and <code className="font-mono text-slate-300">arch-chroot</code>.
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <div className="px-5 py-3 bg-slate-950 border-t border-slate-800 flex justify-end">
+              <button
+                onClick={() => setVmGuideOpen(false)}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs transition cursor-pointer"
+              >
+                Close Guide
               </button>
             </div>
           </div>
