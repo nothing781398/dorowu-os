@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+require_package() {
+    local pkg="$1"
+    if ! pacman -Q "$pkg" >/dev/null 2>&1; then
+        echo "[ERROR] Missing required build dependency: ${pkg}"
+        exit 1
+    fi
+}
+
 echo "==> Initializing pacman keys and system packages"
 pacman-key --init
 pacman-key --populate archlinux
@@ -24,6 +32,37 @@ pacman -Syu --noconfirm --needed \
   syslinux \
   dosfstools \
   mtools
+
+for dep in \
+  archiso \
+  base-devel \
+  git \
+  reflector \
+  imagemagick \
+  jq \
+  curl \
+  python \
+  nodejs \
+  npm \
+  grub \
+  syslinux \
+  dosfstools \
+  mtools; do
+    require_package "$dep"
+done
+
+echo "==> Removing conflicting filesystem files before building"
+rm -rf /work/dorowu-profile/airootfs/usr/lib/os-release 2>/dev/null || true
+rm -rf /work/dorowu-profile/airootfs/etc/os-release 2>/dev/null || true
+rm -rf /work/dorowu-profile/airootfs/etc/issue 2>/dev/null || true
+rm -rf /work/dorowu-profile/airootfs/etc/hostname 2>/dev/null || true
+rm -rf /work/dorowu-profile/airootfs/etc/locale.conf 2>/dev/null || true
+
+# Extra guard: if the file still exists because of another copy, remove it.
+if [[ -e /work/dorowu-profile/airootfs/usr/lib/os-release ]]; then
+    echo "[ERROR] /usr/lib/os-release still exists in airootfs; refusing to continue."
+    exit 1
+fi
 
 echo "==> Building AUR packages into local repository"
 bash build-local-repo.sh
