@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   MessageSquare,
   Plus,
@@ -29,36 +29,6 @@ interface ChatSession {
   mode: 'linux' | 'general';
   messages: ChatMessage[];
   createdAt: string;
-}
-
-interface SystemInfo {
-  distro: string;
-  base: string;
-  kernel: string;
-  desktop: string;
-  installer: string;
-  aiModel: string;
-  workflowFile: string;
-  totalPreinstalledPackages: number;
-  desktopAppEntry: string;
-}
-
-interface AppItem {
-  id: string;
-  name: string;
-  genericName: string;
-  description: string;
-  exec: string;
-  category: string;
-  package: string;
-  desktopFile: string;
-}
-
-interface LicenseInfo {
-  type: string;
-  spdx: string;
-  copyright: string;
-  content: string;
 }
 
 export default function App() {
@@ -97,6 +67,14 @@ export default function App() {
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Current session
+  const currentSession = sessions.find((s) => s.id === currentSessionId);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [currentSession?.messages, isLoading]);
 
   // Theme State: 'slate' (default) vs 'light' (high-contrast light mode)
   const [theme, setTheme] = useState<'slate' | 'light'>(() => {
@@ -122,9 +100,6 @@ export default function App() {
   const [systemInfoModalOpen, setSystemInfoModalOpen] = useState(false);
   const [licenseModalOpen, setLicenseModalOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-
-  // Current session
-  const currentSession = sessions.find((s) => s.id === currentSessionId);
 
   const handleNewSession = () => {
     const newId = `session-${Date.now()}`;
@@ -449,6 +424,7 @@ export default function App() {
                   </div>
                 </div>
               )}
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Input Area */}
