@@ -1,30 +1,63 @@
 @import "tailwindcss";
 
 @layer base {
-  :root.theme-light {
+  :root.theme-light,
+  :root.theme-white {
     color-scheme: light;
   }
-  :root.theme-slate {
+  :root.theme-slate,
+  :root.theme-black,
+  :root.theme-monochrome {
     color-scheme: dark;
   }
 }
 
-/* High-Contrast Light Mode Enhancements */
-.theme-light {
-  --bg-main: #f1f5f9;
+/* White / Light Theme Enhancements */
+.theme-light,
+.theme-white {
+  --bg-main: #f4f4f5;
   --bg-card: #ffffff;
-  --text-main: #020617;
-  --text-muted: #334155;
-  --border-main: #94a3b8;
+  --text-main: #09090b;
+  --text-muted: #52525b;
+  --border-main: #e4e4e7;
 }
 
 .theme-light input,
-.theme-light textarea {
-  color: #020617 !important;
+.theme-light textarea,
+.theme-white input,
+.theme-white textarea {
+  color: #09090b !important;
 }
 
-.theme-light pre,
-.theme-light code {
-  color-scheme: light;
+/* Black Theme Enhancements */
+.theme-slate,
+.theme-black {
+  --bg-main: #09090b;
+  --bg-card: #18181b;
+  --text-main: #fafafa;
+  --text-muted: #a1a1aa;
+  --border-main: #27272a;
+}
+
+/* Black & White (Monochrome High Contrast) Theme Enhancements */
+.theme-monochrome {
+  --bg-main: #000000;
+  --bg-card: #000000;
+  --text-main: #ffffff;
+  --text-muted: #e4e4e7;
+  --border-main: #ffffff;
+}
+
+.theme-monochrome input,
+.theme-monochrome textarea {
+  color: #ffffff !important;
+  background-color: #000000 !important;
+}
+
+.theme-monochrome pre,
+.theme-monochrome code {
+  background-color: #111111 !important;
+  color: #ffffff !important;
+  border: 1px solid #ffffff !important;
 }
 

@@ -16,5 +16,7 @@ alias ll='ls -lah --color=auto'
 alias grep='grep --color=auto'
 alias cat='bat --paging=never 2>/dev/null || cat'
 alias py='python'
+alias ai='ai-assistant'
+alias dorowu-ai='ai-assistant'
 
 echo -e "\033[01;36mDorowu OS 2026.10\033[00m - Terminal Ready."

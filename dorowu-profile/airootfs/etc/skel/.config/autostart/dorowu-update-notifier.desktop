@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Dorowu OS Update Notifier
+Comment=Checks for system and desktop app updates and notifies with Install / Cancel options
+Exec=/usr/local/bin/dorowu-update-notifier
+Hidden=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+X-KDE-autostart-phase=2

@@ -1,12 +1,518 @@
-#!/usr/bin/env bash
-# Dorowu OS Desktop AI Assistant UI Launcher
-set -euo pipefail
+#!/usr/bin/env python3
+"""
+Dorowu AI Assistant — Native Linux Desktop GUI Application
+Built natively for Dorowu OS (Arch Linux / KDE Plasma 6)
+"""
 
-# In desktop session, launch the Dorowu AI Assistant Desktop App UI
-if command -v firefox &>/dev/null; then
-    firefox --new-window "http://localhost:3000" &
-elif command -v xdg-open &>/dev/null; then
-    xdg-open "http://localhost:3000" &
-else
-    echo "Starting Dorowu AI Assistant Desktop Service..."
-fi
+import os
+import sys
+import json
+import time
+import urllib.request
+import urllib.error
+import threading
+import subprocess
+
+# Fallback to CLI mode if no graphical display is found (e.g. pure TTY or headless)
+if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+    cli_candidates = [
+        "/usr/local/bin/ai-assistant",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai-assistant")
+    ]
+    cli_bin = next((c for c in cli_candidates if os.path.exists(c)), None)
+    if cli_bin:
+        os.execv(cli_bin, [cli_bin] + sys.argv[1:])
+    else:
+        print("Dorowu AI Desktop: No graphical display (DISPLAY/WAYLAND_DISPLAY) found and ai-assistant CLI not found.", file=sys.stderr)
+        sys.exit(1)
+
+import tkinter as tk
+from tkinter import ttk, messagebox, filedialog
+
+# Default Configuration & Keys
+DEFAULT_KEY = "AQ.Ab8RN6JngjqaiZjgdaDbezb_iVdIpP8qUtnf1NO6MQHUgp596Q"
+DEFAULT_MODEL = "gemini-3.1-flash-lite"
+SYSTEM_PROMPT = (
+    "You are the Dorowu OS Desktop AI Assistant. "
+    "When asked who you are (such as 'who are you', 'who are u', 'who are you?'), "
+    "you must always explicitly state: \"I'm an AI assistant of Dorowu OS\". "
+    "You are an expert Linux, Arch Linux, KDE Plasma, and systems engineering companion built into Dorowu OS. "
+    "Provide clear, accurate, and actionable terminal commands, configuration guidance, and explanations."
+)
+
+CONFIG_DIR = os.path.expanduser("~/.config/dorowu")
+CONFIG_FILE = os.path.join(CONFIG_DIR, "ai-assistant.conf")
+
+def get_api_key():
+    env_key = os.environ.get("GEMINI_API_KEY")
+    if env_key:
+        return env_key
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip().startswith("API_KEY="):
+                        val = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
+                        if val:
+                            return val
+        except Exception:
+            pass
+    return DEFAULT_KEY
+
+class DorowuAIDesktop(tk.Tk):
+    def __init__(self):
+        super().__init__()
+
+        self.title("Dorowu AI Assistant — Native Linux Desktop")
+        self.geometry("960x700")
+        self.minsize(720, 500)
+
+        # Set modern dark theme colors (Breeze Dark inspired)
+        self.bg_root = "#181a1c"
+        self.bg_sidebar = "#1f2225"
+        self.bg_chat = "#141618"
+        self.bg_card = "#25292e"
+        self.bg_input = "#1e2226"
+        self.fg_primary = "#eff0f1"
+        self.fg_secondary = "#a0a6ad"
+        self.accent_color = "#3daee9"       # KDE Plasma Cyan
+        self.accent_hover = "#52b8ed"
+        self.bubble_user_bg = "#22313f"     # Deep subtle blue-slate
+        self.bubble_ai_bg = "#23282e"       # Breeze dark card
+        self.bubble_border = "#2f363f"
+        self.code_bg = "#111315"
+
+        self.configure(bg=self.bg_root)
+
+        # Set WM Class and Window Icon
+        try:
+            self.wm_class("dorowu-ai-ui", "Dorowu-ai-ui")
+        except Exception:
+            pass
+        self._setup_window_icon()
+
+        self.current_model = tk.StringVar(value=DEFAULT_MODEL)
+        self.api_key = get_api_key()
+        self.conversation_history = []
+        self.is_generating = False
+
+        self._build_ui()
+        self._show_welcome_message()
+
+    def _setup_window_icon(self):
+        icon_candidates = [
+            "/usr/share/pixmaps/dorowu-ai.png",
+            "/usr/share/icons/hicolor/256x256/apps/dorowu-ai.png",
+            "/usr/share/pixmaps/dorowu-logo.png",
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../share/pixmaps/dorowu-ai.png"),
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "../share/pixmaps/dorowu-ai.png"),
+        ]
+        for icon_path in icon_candidates:
+            if os.path.exists(icon_path):
+                try:
+                    icon_img = tk.PhotoImage(file=icon_path)
+                    self.iconphoto(True, icon_img)
+                    self._window_icon = icon_img
+                    break
+                except Exception:
+                    continue
+
+    def _build_ui(self):
+        # Configure root grid weights
+        self.grid_columnconfigure(0, weight=0, minsize=240)
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        # ----------------- SIDEBAR -----------------
+        sidebar = tk.Frame(self, bg=self.bg_sidebar, width=240, padx=14, pady=16)
+        sidebar.grid(row=0, column=0, sticky="nsew")
+        sidebar.grid_propagate(False)
+
+        # Brand / OS Badge
+        lbl_brand = tk.Label(
+            sidebar,
+            text="🐧 DOROWU OS",
+            font=("JetBrains Mono", 13, "bold"),
+            fg=self.accent_color,
+            bg=self.bg_sidebar,
+            anchor="w"
+        )
+        lbl_brand.pack(fill="x", pady=(0, 2))
+
+        lbl_subbrand = tk.Label(
+            sidebar,
+            text="Native Desktop AI Assistant",
+            font=("Segoe UI", 9),
+            fg=self.fg_secondary,
+            bg=self.bg_sidebar,
+            anchor="w"
+        )
+        lbl_subbrand.pack(fill="x", pady=(0, 16))
+
+        # Status Pill
+        status_frame = tk.Frame(sidebar, bg=self.bg_card, padx=8, pady=6, relief="flat")
+        status_frame.pack(fill="x", pady=(0, 14))
+
+        self.lbl_status_dot = tk.Label(status_frame, text="●", fg="#2ecc71", bg=self.bg_card, font=("Segoe UI", 10))
+        self.lbl_status_dot.pack(side="left", padx=(0, 6))
+
+        self.lbl_status_text = tk.Label(status_frame, text="API Connected", fg=self.fg_primary, bg=self.bg_card, font=("Segoe UI", 9, "bold"))
+        self.lbl_status_text.pack(side="left")
+
+        # Model Selection Label & Combobox
+        lbl_model = tk.Label(sidebar, text="Active Engine / Model:", font=("Segoe UI", 9, "bold"), fg=self.fg_secondary, bg=self.bg_sidebar, anchor="w")
+        lbl_model.pack(fill="x", pady=(0, 4))
+
+        model_dropdown = ttk.Combobox(
+            sidebar,
+            textvariable=self.current_model,
+            values=["gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro"],
+            state="readonly"
+        )
+        model_dropdown.pack(fill="x", pady=(0, 16))
+
+        # Quick Presets Header
+        lbl_presets = tk.Label(sidebar, text="System Action Presets:", font=("Segoe UI", 9, "bold"), fg=self.fg_secondary, bg=self.bg_sidebar, anchor="w")
+        lbl_presets.pack(fill="x", pady=(0, 6))
+
+        presets = [
+            ("🤖 Verify Identity", "who are you"),
+            ("🔧 Arch System Update", "Give me safe terminal commands to update Arch Linux and handle pacnew files."),
+            ("📦 Clean Pacman Cache", "How do I safely clean orphan packages and pacman cache on Dorowu OS?"),
+            ("🛡️ Check Systemd Units", "How do I list and debug failed systemd services on Linux?"),
+            ("💾 Btrfs Subvolumes & Snaps", "How do I take a snapshot of a Btrfs subvolume in Arch Linux?"),
+            ("⚡ GPU & Vulkan Status", "Show commands to verify Vulkan and OpenGL hardware acceleration drivers."),
+        ]
+
+        for title, prompt_text in presets:
+            btn = tk.Button(
+                sidebar,
+                text=title,
+                anchor="w",
+                font=("Segoe UI", 8),
+                fg=self.fg_primary,
+                bg=self.bg_card,
+                activebackground=self.bubble_user_bg,
+                activeforeground=self.fg_primary,
+                relief="flat",
+                padx=8,
+                pady=4,
+                cursor="hand2",
+                command=lambda p=prompt_text: self._use_preset(p)
+            )
+            btn.pack(fill="x", pady=3)
+
+        # Spacer to push action buttons to bottom
+        spacer = tk.Frame(sidebar, bg=self.bg_sidebar)
+        spacer.pack(fill="both", expand=True)
+
+        # Bottom Actions in Sidebar
+        btn_clear = tk.Button(
+            sidebar,
+            text="🗑️ Clear Chat",
+            font=("Segoe UI", 9),
+            fg=self.fg_secondary,
+            bg=self.bg_card,
+            activebackground="#c0392b",
+            activeforeground="#ffffff",
+            relief="flat",
+            pady=4,
+            cursor="hand2",
+            command=self._clear_chat
+        )
+        btn_clear.pack(fill="x", pady=(0, 4))
+
+        btn_export = tk.Button(
+            sidebar,
+            text="💾 Save Log",
+            font=("Segoe UI", 9),
+            fg=self.fg_secondary,
+            bg=self.bg_card,
+            activebackground=self.accent_color,
+            activeforeground="#ffffff",
+            relief="flat",
+            pady=4,
+            cursor="hand2",
+            command=self._export_log
+        )
+        btn_export.pack(fill="x")
+
+        # ----------------- MAIN VIEW -----------------
+        main_frame = tk.Frame(self, bg=self.bg_chat)
+        main_frame.grid(row=0, column=1, sticky="nsew")
+        main_frame.grid_rowconfigure(1, weight=1)
+        main_frame.grid_columnconfigure(0, weight=1)
+
+        # Top Bar
+        topbar = tk.Frame(main_frame, bg=self.bg_root, padx=16, pady=10)
+        topbar.grid(row=0, column=0, sticky="ew")
+
+        lbl_title = tk.Label(topbar, text="Dorowu Desktop AI", font=("Segoe UI", 12, "bold"), fg=self.fg_primary, bg=self.bg_root)
+        lbl_title.pack(side="left")
+
+        self.lbl_active_engine = tk.Label(
+            topbar,
+            text=f"Model: {DEFAULT_MODEL} | Architecture: Linux x86_64",
+            font=("Segoe UI", 9),
+            fg=self.accent_color,
+            bg=self.bg_root
+        )
+        self.lbl_active_engine.pack(side="right")
+
+        # Chat Stream Area (Text with modern Scrollbar)
+        chat_container = tk.Frame(main_frame, bg=self.bg_chat, padx=12, pady=10)
+        chat_container.grid(row=1, column=0, sticky="nsew")
+        chat_container.grid_rowconfigure(0, weight=1)
+        chat_container.grid_columnconfigure(0, weight=1)
+
+        self.chat_display = tk.Text(
+            chat_container,
+            wrap="word",
+            bg=self.bg_chat,
+            fg=self.fg_primary,
+            insertbackground=self.accent_color,
+            font=("Segoe UI", 10),
+            relief="flat",
+            padx=12,
+            pady=10,
+            selectbackground=self.accent_color,
+            selectforeground="#ffffff",
+            state="disabled"
+        )
+        self.chat_display.grid(row=0, column=0, sticky="nsew")
+
+        scrollbar = ttk.Scrollbar(chat_container, command=self.chat_display.yview)
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        self.chat_display.configure(yscrollcommand=scrollbar.set)
+
+        # Configure Text Tags for High-Fidelity Rendering
+        self.chat_display.tag_configure("system_banner", font=("Segoe UI", 10, "italic"), foreground=self.accent_color, justify="center")
+        self.chat_display.tag_configure("user_header", font=("Segoe UI", 10, "bold"), foreground="#70b5ff")
+        self.chat_display.tag_configure("user_msg", font=("Segoe UI", 10), foreground="#ffffff")
+        self.chat_display.tag_configure("ai_header", font=("Segoe UI", 10, "bold"), foreground=self.accent_color)
+        self.chat_display.tag_configure("ai_msg", font=("Segoe UI", 10), foreground=self.fg_primary)
+        self.chat_display.tag_configure("code_block", font=("JetBrains Mono", 9), background=self.code_bg, foreground="#a8ff60")
+        self.chat_display.tag_configure("divider", font=("Segoe UI", 4), foreground=self.bg_card)
+
+        # Bottom Input Area
+        input_container = tk.Frame(main_frame, bg=self.bg_root, padx=14, pady=12)
+        input_container.grid(row=2, column=0, sticky="ew")
+        input_container.grid_columnconfigure(0, weight=1)
+
+        self.input_entry = tk.Text(
+            input_container,
+            height=3,
+            wrap="word",
+            bg=self.bg_input,
+            fg=self.fg_primary,
+            insertbackground=self.accent_color,
+            font=("Segoe UI", 10),
+            relief="flat",
+            padx=10,
+            pady=8
+        )
+        self.input_entry.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+        self.input_entry.bind("<Return>", self._on_enter_pressed)
+        self.input_entry.bind("<Shift-Return>", lambda e: None)  # allow multiline with Shift+Enter
+        self.input_entry.focus_set()
+
+        btn_box = tk.Frame(input_container, bg=self.bg_root)
+        btn_box.grid(row=0, column=1, sticky="ns")
+
+        self.btn_send = tk.Button(
+            btn_box,
+            text="Send  ➤",
+            font=("Segoe UI", 10, "bold"),
+            bg=self.accent_color,
+            fg="#ffffff",
+            activebackground=self.accent_hover,
+            activeforeground="#ffffff",
+            relief="flat",
+            padx=16,
+            pady=8,
+            cursor="hand2",
+            command=self._send_message
+        )
+        self.btn_send.pack(fill="both", expand=True)
+
+    def _show_welcome_message(self):
+        welcome_text = (
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "✨ Dorowu OS Desktop AI Assistant is Online\n"
+            "Native Linux Desktop Client | KDE Plasma 6 Breeze Integration\n"
+            "Ask system questions, debug errors, or generate Linux commands.\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        )
+        self._append_text(welcome_text, "system_banner")
+
+    def _append_text(self, text, tag=None):
+        self.chat_display.configure(state="normal")
+        if tag:
+            self.chat_display.insert("end", text, tag)
+        else:
+            self.chat_display.insert("end", text)
+        self.chat_display.insert("end", "\n")
+        self.chat_display.see("end")
+        self.chat_display.configure(state="disabled")
+
+    def _use_preset(self, prompt_text):
+        if self.is_generating:
+            return
+        self.input_entry.delete("1.0", "end")
+        self.input_entry.insert("1.0", prompt_text)
+        self._send_message()
+
+    def _on_enter_pressed(self, event):
+        # If Shift is pressed, let it insert a newline
+        if event.state & 0x0001:
+            return None
+        self._send_message()
+        return "break"
+
+    def _send_message(self):
+        if self.is_generating:
+            return
+
+        user_text = self.input_entry.get("1.0", "end").strip()
+        if not user_text:
+            return
+
+        self.input_entry.delete("1.0", "end")
+
+        # Render User Bubble
+        self._append_text(f"You ({time.strftime('%H:%M:%S')}):", "user_header")
+        self._append_text(f"{user_text}\n", "user_msg")
+
+        self.is_generating = True
+        self.btn_send.configure(text="Thinking...", state="disabled", bg=self.bg_card)
+        self.lbl_status_dot.configure(fg="#f39c12")
+        self.lbl_status_text.configure(text="Generating...")
+        self.lbl_active_engine.configure(text=f"Querying {self.current_model.get()}...")
+
+        # Spawn background query thread to prevent GUI lockup
+        threading.Thread(
+            target=self._query_backend_thread,
+            args=(user_text, self.current_model.get()),
+            daemon=True
+        ).start()
+
+    def _query_backend_thread(self, prompt, model):
+        try:
+            # 1. First attempt: Direct Google Gemini Generative Language API
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.api_key}"
+            payload = {
+                "systemInstruction": {
+                    "parts": [{"text": SYSTEM_PROMPT}]
+                },
+                "contents": [
+                    {
+                        "parts": [{"text": prompt}]
+                    }
+                ]
+            }
+            data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                resp_json = json.loads(resp.read().decode("utf-8"))
+                text_out = resp_json["candidates"][0]["content"]["parts"][0]["text"]
+                self.after(0, self._handle_query_success, text_out)
+                return
+
+        except Exception as e_direct:
+            # 2. Second attempt: Fallback to local /usr/local/bin/ai-assistant CLI binary
+            cli_path = "/usr/local/bin/ai-assistant"
+            if os.path.exists(cli_path):
+                try:
+                    res = subprocess.run(
+                        [cli_path, "-m", model, prompt],
+                        capture_output=True,
+                        text=True,
+                        timeout=35
+                    )
+                    if res.returncode == 0 and res.stdout.strip():
+                        self.after(0, self._handle_query_success, res.stdout.strip())
+                        return
+                except Exception:
+                    pass
+
+            # If both failed, display error message
+            err_msg = f"Network or API Error: {str(e_direct)}\nEnsure internet connectivity and verify GEMINI_API_KEY."
+            self.after(0, self._handle_query_error, err_msg)
+
+    def _handle_query_success(self, response_text):
+        self.is_generating = False
+        self.btn_send.configure(text="Send  ➤", state="normal", bg=self.accent_color)
+        self.lbl_status_dot.configure(fg="#2ecc71")
+        self.lbl_status_text.configure(text="API Connected")
+        self.lbl_active_engine.configure(text=f"Model: {self.current_model.get()} | Active")
+
+        # Format and append AI Response
+        self._append_text(f"Dorowu AI ({self.current_model.get()}):", "ai_header")
+
+        # Format code blocks if any
+        lines = response_text.splitlines()
+        in_code = False
+        code_buffer = []
+
+        for line in lines:
+            if line.strip().startswith("```"):
+                if in_code:
+                    in_code = False
+                    self._append_text("\n".join(code_buffer), "code_block")
+                    code_buffer = []
+                else:
+                    in_code = True
+                    code_buffer = []
+            elif in_code:
+                code_buffer.append(line)
+            else:
+                self._append_text(line, "ai_msg")
+
+        if code_buffer:
+            self._append_text("\n".join(code_buffer), "code_block")
+
+        self._append_text("────────────────────────────────────────────────────────────\n", "divider")
+        self.conversation_history.append({"user": self.input_entry, "ai": response_text})
+
+    def _handle_query_error(self, err_text):
+        self.is_generating = False
+        self.btn_send.configure(text="Send  ➤", state="normal", bg=self.accent_color)
+        self.lbl_status_dot.configure(fg="#e74c3c")
+        self.lbl_status_text.configure(text="Error")
+        self.lbl_active_engine.configure(text="Query Failed")
+
+        self._append_text("Dorowu AI Assistant (System Error):", "ai_header")
+        self._append_text(err_text + "\n", "user_msg")
+
+    def _clear_chat(self):
+        self.chat_display.configure(state="normal")
+        self.chat_display.delete("1.0", "end")
+        self.chat_display.configure(state="disabled")
+        self._show_welcome_message()
+
+    def _export_log(self):
+        content = self.chat_display.get("1.0", "end").strip()
+        if not content:
+            messagebox.showinfo("Export Log", "Chat is currently empty.")
+            return
+
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("Markdown files", "*.md"), ("All files", "*.*")],
+            title="Save Dorowu AI Conversation Log"
+        )
+        if file_path:
+            try:
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                messagebox.showinfo("Export Successful", f"Saved to {file_path}")
+            except Exception as e:
+                messagebox.showerror("Export Failed", f"Could not save file: {str(e)}")
+
+def main():
+    app = DorowuAIDesktop()
+    app.mainloop()
+
+if __name__ == "__main__":
+    main()

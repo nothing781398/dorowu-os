@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Dorowu AI Assistant
+GenericName=AI Linux Desktop Application
+Comment=Official native desktop GUI application for Linux administration, scripting, and system queries
+Exec=/usr/local/bin/dorowu-ai-ui
+Icon=dorowu-ai
+Terminal=false
+StartupNotify=true
+StartupWMClass=dorowu-ai-ui
+Categories=Utility;Development;System;
+Keywords=ai;assistant;desktop;gui;gemini;dorowu;chat;linux;

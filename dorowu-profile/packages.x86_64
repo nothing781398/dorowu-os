@@ -64,6 +64,7 @@ xorg-xwayland
 qt6-wayland
 
 # --- KDE Plasma 6 Desktop Environment ---
+systemsettings
 sddm
 sddm-kcm
 plasma-desktop
@@ -72,6 +73,8 @@ plasma-nm
 plasma-pa
 kscreen
 kwin
+kdialog
+libnotify
 breeze
 breeze-gtk
 papirus-icon-theme
@@ -111,8 +114,10 @@ gvfs-smb
 discover
 packagekit-qt6
 archlinux-appstream-data
+plasma-discover-notifier
 flatpak
 fwupd
+pacman-contrib
 
 # --- Real Mozilla Firefox & Core System Apps ---
 firefox
@@ -134,6 +139,7 @@ kaccounts-providers
 # --- Hardcore Developer & Terminal Environment ---
 kitty
 python
+tk
 python-pip
 python-pipx
 python-virtualenv

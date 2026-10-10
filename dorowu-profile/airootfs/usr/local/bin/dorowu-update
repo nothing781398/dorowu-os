@@ -1,0 +1,262 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Dorowu OS System & Application Updater (Native Linux)
+# Performs real rolling updates for Arch Linux core, KDE Plasma, & Flatpak apps
+# ==============================================================================
+
+set -e
+
+COLOR_RESET="\033[0m"
+COLOR_BOLD="\033[1m"
+COLOR_CYAN="\033[36m"
+COLOR_GREEN="\033[32m"
+COLOR_YELLOW="\033[33m"
+COLOR_RED="\033[31m"
+COLOR_BLUE="\033[34m"
+
+log_info() {
+    echo -e "${COLOR_CYAN}[Dorowu Updater]${COLOR_RESET} $1"
+}
+
+log_success() {
+    echo -e "${COLOR_GREEN}[Dorowu Updater ✓]${COLOR_RESET} $1"
+}
+
+log_warn() {
+    echo -e "${COLOR_YELLOW}[Dorowu Updater ⚠]${COLOR_RESET} $1"
+}
+
+log_error() {
+    echo -e "${COLOR_RED}[Dorowu Updater ✗]${COLOR_RESET} $1"
+}
+
+show_help() {
+    echo -e "${COLOR_BOLD}Dorowu OS Real System & App Updater${COLOR_RESET}"
+    echo "Usage: dorowu-update [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  --check, -c         Check for pending system and application updates without installing"
+    echo "  --system-only, -s   Update only Arch Linux core & KDE system packages (pacman)"
+    echo "  --apps-only, -a     Update only desktop GUI applications (flatpak)"
+    echo "  --mirrors, -m       Update and rank Arch Linux package mirrors before updating"
+    echo "  --clean, -k         Clean package cache after updating (retains last 2 versions)"
+    echo "  --help, -h          Display this help message"
+    echo ""
+    echo "Examples:"
+    echo "  dorowu-update                  # Full system & desktop app upgrade"
+    echo "  dorowu-update --check          # Check for pending updates"
+    echo "  dorowu-update --mirrors        # Optimize mirrors + full upgrade"
+}
+
+check_network() {
+    log_info "Verifying network connectivity..."
+    if ! curl -s --connect-timeout 5 https://archlinux.org > /dev/null 2>&1; then
+        if ! curl -s --connect-timeout 5 https://1.1.1.1 > /dev/null 2>&1; then
+            log_error "Network connection unavailable. Please connect to Wi-Fi or Ethernet."
+            return 1
+        fi
+    fi
+    log_success "Network connected."
+    return 0
+}
+
+check_updates_mode() {
+    log_info "Checking for pending updates..."
+    echo ""
+    
+    # Check Arch system packages
+    echo -e "${COLOR_BOLD}--- Arch Linux System Packages ---${COLOR_RESET}"
+    ARCH_COUNT=0
+    if command -v checkupdates >/dev/null 2>&1; then
+        UPDATES=$(checkupdates 2>/dev/null || true)
+        if [ -n "$UPDATES" ]; then
+            echo "$UPDATES"
+            ARCH_COUNT=$(echo "$UPDATES" | wc -l)
+            echo -e "${COLOR_YELLOW}$ARCH_COUNT system package(s) can be upgraded.${COLOR_RESET}"
+        else
+            echo -e "${COLOR_GREEN}Arch Linux system is up to date.${COLOR_RESET}"
+        fi
+    else
+        log_warn "checkupdates utility not found; checking pacman database..."
+        if [ "$EUID" -eq 0 ]; then
+            pacman -Sy >/dev/null 2>&1 || true
+            UPDATES=$(pacman -Qu 2>/dev/null || true)
+            if [ -n "$UPDATES" ]; then
+                echo "$UPDATES"
+                ARCH_COUNT=$(echo "$UPDATES" | wc -l)
+                echo -e "${COLOR_YELLOW}$ARCH_COUNT system package(s) can be upgraded.${COLOR_RESET}"
+            else
+                echo -e "${COLOR_GREEN}Arch Linux system is up to date.${COLOR_RESET}"
+            fi
+        else
+            echo "Run 'sudo pacman -Sy && pacman -Qu' to check as root."
+        fi
+    fi
+
+    echo ""
+    # Check Flatpak desktop applications
+    echo -e "${COLOR_BOLD}--- Desktop GUI Applications (Flatpak) ---${COLOR_RESET}"
+    FLATPAK_COUNT=0
+    if command -v flatpak >/dev/null 2>&1; then
+        FLAT_UPDATES=$(flatpak remote-ls --updates 2>/dev/null || true)
+        if [ -n "$FLAT_UPDATES" ]; then
+            echo "$FLAT_UPDATES"
+            FLATPAK_COUNT=$(echo "$FLAT_UPDATES" | wc -l)
+            echo -e "${COLOR_YELLOW}$FLATPAK_COUNT desktop application(s) can be upgraded.${COLOR_RESET}"
+        else
+            echo -e "${COLOR_GREEN}All desktop applications are up to date.${COLOR_RESET}"
+        fi
+    else
+        echo "Flatpak is not installed on this system."
+    fi
+
+    TOTAL=$((ARCH_COUNT + FLATPAK_COUNT))
+    echo ""
+    echo -e "${COLOR_BOLD}Summary:${COLOR_RESET} $TOTAL total update(s) available ($ARCH_COUNT system, $FLATPAK_COUNT apps)."
+}
+
+refresh_mirrors() {
+    log_info "Updating Arch Linux mirrors via Reflector..."
+    if command -v reflector >/dev/null 2>&1; then
+        reflector --latest 20 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
+        log_success "Mirrors optimized and saved."
+    else
+        log_warn "Reflector not found; skipping mirror optimization."
+    fi
+}
+
+update_arch_keyring() {
+    log_info "Step 1/4: Refreshing Arch Linux master keys (archlinux-keyring)..."
+    pacman -Sy --noconfirm archlinux-keyring || true
+    log_success "Arch Linux keyring synchronized."
+}
+
+update_system_packages() {
+    log_info "Step 2/4: Performing full Arch Linux rolling upgrade (pacman -Syu)..."
+    pacman -Syu --noconfirm
+    log_success "Arch Linux base system & KDE Plasma updated."
+}
+
+update_flatpak_apps() {
+    log_info "Step 3/4: Updating Flatpak desktop applications..."
+    if command -v flatpak >/dev/null 2>&1; then
+        flatpak update -y --noninteractive || true
+        log_success "Desktop applications updated."
+    else
+        log_warn "Flatpak is not available; skipping application update."
+    fi
+}
+
+clean_cache() {
+    log_info "Step 4/4: Optimizing package storage..."
+    if command -v paccache >/dev/null 2>&1; then
+        paccache -rk2 || true
+        log_success "Package cache trimmed to last 2 versions."
+    fi
+    if command -v flatpak >/dev/null 2>&1; then
+        flatpak uninstall --unused -y || true
+    fi
+}
+
+check_reboot_needed() {
+    if [ -f /var/run/reboot-required ]; then
+        echo ""
+        log_warn "A system restart is recommended to load newly updated kernel modules."
+    elif [ -d /lib/modules ]; then
+        CURRENT_KERNEL=$(uname -r)
+        if [ ! -d "/lib/modules/$CURRENT_KERNEL" ]; then
+            echo ""
+            log_warn "Kernel update detected (running: $CURRENT_KERNEL). Please reboot to load new kernel."
+        fi
+    fi
+}
+
+# ----------------- Main Execution Logic -----------------
+DO_CHECK=false
+DO_SYSTEM=true
+DO_APPS=true
+DO_MIRRORS=false
+DO_CLEAN=true
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --check|-c)
+            DO_CHECK=true
+            shift
+            ;;
+        --system-only|-s)
+            DO_SYSTEM=true
+            DO_APPS=false
+            shift
+            ;;
+        --apps-only|-a)
+            DO_SYSTEM=false
+            DO_APPS=true
+            shift
+            ;;
+        --mirrors|-m)
+            DO_MIRRORS=true
+            shift
+            ;;
+        --clean|-k)
+            DO_CLEAN=true
+            shift
+            ;;
+        --help|-h)
+            show_help
+            exit 0
+            ;;
+        *)
+            log_error "Unknown argument: $1"
+            show_help
+            exit 1
+            ;;
+    esac
+done
+
+if [ "$DO_CHECK" = true ]; then
+    check_network || exit 1
+    check_updates_mode
+    exit 0
+fi
+
+# Elevate privileges if executing real updates
+if [ "$EUID" -ne 0 ]; then
+    log_info "Administrative privileges required to apply system updates. Relaunching with sudo..."
+    exec sudo "$0" "$@"
+fi
+
+check_network || exit 1
+
+START_TIME=$(date +%s)
+echo -e "${COLOR_BOLD}================================================================${COLOR_RESET}"
+echo -e "${COLOR_BOLD}         Dorowu OS — Starting Real System & App Updates         ${COLOR_RESET}"
+echo -e "${COLOR_BOLD}================================================================${COLOR_RESET}"
+
+if [ "$DO_MIRRORS" = true ]; then
+    refresh_mirrors
+fi
+
+if [ "$DO_SYSTEM" = true ]; then
+    update_arch_keyring
+    update_system_packages
+fi
+
+if [ "$DO_APPS" = true ]; then
+    update_flatpak_apps
+fi
+
+if [ "$DO_CLEAN" = true ]; then
+    clean_cache
+fi
+
+END_TIME=$(date +%s)
+DURATION=$((END_TIME - START_TIME))
+
+echo ""
+echo -e "${COLOR_BOLD}================================================================${COLOR_RESET}"
+log_success "All Dorowu OS system packages and desktop apps are up to date! (${DURATION}s)"
+echo -e "${COLOR_BOLD}================================================================${COLOR_RESET}"
+
+check_reboot_needed
+exit 0

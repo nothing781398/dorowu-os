@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="upd_bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#091e3a"/>
+      <stop offset="45%" stop-color="#0c4a6e"/>
+      <stop offset="85%" stop-color="#0284c7"/>
+      <stop offset="100%" stop-color="#10b981"/>
+    </linearGradient>
+
+    <!-- Arrow Gradient -->
+    <linearGradient id="upd_arrow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="50%" stop-color="#7dd3fc"/>
+      <stop offset="100%" stop-color="#34d399"/>
+    </linearGradient>
+
+    <!-- Center Shield Gradient -->
+    <linearGradient id="core_grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </linearGradient>
+
+    <!-- Inner Radial Glow -->
+    <radialGradient id="upd_glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Base Squircle -->
+  <rect width="512" height="512" rx="116" ry="116" fill="url(#upd_bg)"/>
+  <rect width="504" height="504" x="4" y="4" rx="112" ry="112" fill="none" stroke="#38bdf8" stroke-width="4" stroke-opacity="0.35"/>
+
+  <!-- Radial Core Glow -->
+  <circle cx="256" cy="256" r="160" fill="url(#upd_glow)"/>
+
+  <!-- Rotating Sync / Refresh Arrows Ring -->
+  <!-- Top Arc Arrow -->
+  <path d="M 160 210 A 130 130 0 0 1 372 176 L 392 136 L 402 216 L 322 214 L 350 186 A 102 102 0 0 0 178 214 Z" fill="url(#upd_arrow)"/>
+  
+  <!-- Bottom Arc Arrow -->
+  <path d="M 352 302 A 130 130 0 0 1 140 336 L 120 376 L 110 296 L 190 298 L 162 326 A 102 102 0 0 0 334 298 Z" fill="url(#upd_arrow)"/>
+
+  <!-- Central Download Arrow & Tech Core -->
+  <circle cx="256" cy="256" r="62" fill="#0b1a2d" stroke="#38bdf8" stroke-width="4"/>
+  <path d="M 256 220 V 276 M 236 260 L 256 280 L 276 260 M 230 294 H 282" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Corner Dot Accents -->
+  <circle cx="120" cy="120" r="6" fill="#34d399" opacity="0.8"/>
+  <circle cx="392" cy="392" r="6" fill="#38bdf8" opacity="0.8"/>
+</svg>

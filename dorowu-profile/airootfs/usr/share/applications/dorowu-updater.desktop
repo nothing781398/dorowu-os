@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Dorowu System & App Updater
+GenericName=System & App Updater
+Comment=Check and install official rolling updates for Arch Linux, KDE Plasma, and desktop applications
+Exec=/usr/local/bin/dorowu-updater-ui
+Icon=dorowu-updater
+Terminal=false
+StartupNotify=true
+StartupWMClass=dorowu-updater-ui
+Categories=Qt;KDE;Settings;System;PackageManager;
+X-KDE-Settings-Parent-Category=system-administration
+X-KDE-System-Settings-Parent-Category=system-administration
+X-KDE-Weight=60
+Keywords=update;updater;upgrade;pacman;flatpak;system;apps;dorowu;arch;settings;

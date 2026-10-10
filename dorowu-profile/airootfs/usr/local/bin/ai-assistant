@@ -5,7 +5,7 @@ CONFIG_DIR="${HOME}/.config/dorowu"
 CONFIG_FILE="${CONFIG_DIR}/ai-assistant.conf"
 
 PROVIDER="gemini"
-MODEL="gemini-2.5-flash"
+MODEL="gemini-3.1-flash-lite"
 DEFAULT_KEY="AQ.Ab8RN6JngjqaiZjgdaDbezb_iVdIpP8qUtnf1NO6MQHUgp596Q"
 API_KEY="${GEMINI_API_KEY:-${DEFAULT_KEY}}"
 OPENAI_BASE_URL="https://api.openai.com/v1"

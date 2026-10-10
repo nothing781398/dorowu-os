@@ -2,10 +2,12 @@
 Type=Application
 Version=1.0
 Name=Dorowu AI Assistant
-GenericName=AI System Companion
-Comment=Official Dorowu OS desktop AI companion for Linux troubleshooting, development, and general intelligence
+GenericName=AI Linux Desktop Application
+Comment=Official native desktop GUI application for Linux administration, scripting, and system queries
 Exec=/usr/local/bin/dorowu-ai-ui
-Icon=dorowu-logo
+Icon=dorowu-ai
 Terminal=false
 StartupNotify=true
+StartupWMClass=dorowu-ai-ui
 Categories=Utility;Development;System;
+Keywords=ai;assistant;desktop;gui;gemini;dorowu;chat;linux;

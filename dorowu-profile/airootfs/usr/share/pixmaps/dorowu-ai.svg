@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="40%" stop-color="#1e3a8a"/>
+      <stop offset="85%" stop-color="#0284c7"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+
+    <!-- Glowing Accent Gradient -->
+    <linearGradient id="sparkleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="60%" stop-color="#e0f2fe"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+
+    <!-- Secondary Star Gradient -->
+    <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7dd3fc"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+
+    <!-- Radial Glow Filter -->
+    <radialGradient id="haloGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Base Squircle -->
+  <rect width="512" height="512" rx="116" ry="116" fill="url(#bgGrad)"/>
+  <rect width="504" height="504" x="4" y="4" rx="112" ry="112" fill="none" stroke="#38bdf8" stroke-width="4" stroke-opacity="0.35"/>
+
+  <!-- Subtle Radial Glow Behind Sparkle -->
+  <circle cx="256" cy="256" r="170" fill="url(#haloGlow)"/>
+
+  <!-- Orbital Cyber Ring / AI Circuit Accents -->
+  <ellipse cx="256" cy="256" rx="160" ry="86" fill="none" stroke="#38bdf8" stroke-width="4" stroke-opacity="0.4" stroke-dasharray="16 12" transform="rotate(-28 256 256)"/>
+
+  <!-- Corner Terminal Prompt Accent (>_ Dorowu OS System) -->
+  <path d="M 108 392 L 138 416 L 108 440" fill="none" stroke="#7dd3fc" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.75"/>
+  <line x1="152" y1="440" x2="182" y2="440" stroke="#38bdf8" stroke-width="6" stroke-linecap="round" stroke-opacity="0.85"/>
+
+  <!-- Central Primary 4-Point AI Sparkle Star -->
+  <path d="M 256 104 C 256 186 204 256 122 256 C 204 256 256 326 256 408 C 256 326 308 256 390 256 C 308 256 256 186 256 104 Z" fill="url(#sparkleGrad)"/>
+
+  <!-- Center Core Shimmer -->
+  <circle cx="256" cy="256" r="14" fill="#ffffff"/>
+
+  <!-- Secondary Companion Sparkle (Top-Right) -->
+  <path d="M 374 136 C 374 166 354 190 324 190 C 354 190 374 214 374 244 C 374 214 394 190 424 190 C 394 190 374 166 374 136 Z" fill="url(#cyanGrad)"/>
+
+  <!-- Tertiary Tiny Sparkle (Bottom-Left) -->
+  <path d="M 152 176 C 152 194 140 208 122 208 C 140 208 152 222 152 240 C 152 222 164 208 182 208 C 164 208 152 194 152 176 Z" fill="#e0f2fe"/>
+
+  <!-- Neural Constellation Nodes -->
+  <circle cx="374" cy="190" r="5" fill="#ffffff"/>
+  <circle cx="152" cy="208" r="4" fill="#ffffff"/>
+  <circle cx="396" cy="356" r="6" fill="#38bdf8" fill-opacity="0.9"/>
+  <line x1="256" y1="256" x2="396" y2="356" stroke="#38bdf8" stroke-width="2.5" stroke-dasharray="6 6" stroke-opacity="0.5"/>
+</svg>

@@ -13,9 +13,6 @@ echo "==> Initializing pacman keys and system packages"
 pacman-key --init
 pacman-key --populate archlinux
 
-echo "==> Updating mirrors with Reflector"
-reflector --latest 10 --protocol https --sort rate --save /etc/pacman.d/mirrorlist || true
-
 echo "==> Installing build dependencies"
 pacman -Syu --noconfirm --needed \
   archiso \
@@ -32,6 +29,15 @@ pacman -Syu --noconfirm --needed \
   syslinux \
   dosfstools \
   mtools
+
+echo "==> Updating mirrors with Reflector"
+reflector --latest 10 --protocol https --sort rate --save /etc/pacman.d/mirrorlist || true
+
+# Configure curl to use HTTP/1.1 for salsa.debian.org / gitlab stability inside container
+mkdir -p /etc
+if ! grep -q "http1.1" /etc/curlrc 2>/dev/null; then
+  echo "--http1.1" >> /etc/curlrc
+fi
 
 for dep in \
   archiso \

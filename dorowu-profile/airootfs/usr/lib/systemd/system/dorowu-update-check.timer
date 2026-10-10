@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Timer for Dorowu OS System and Application Update Check
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1d
+Persistent=true
+
+[Install]
+WantedBy=timers.target

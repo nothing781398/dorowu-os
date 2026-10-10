@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Dorowu Live Desktop Setup
-Exec=/bin/sh -c 'mkdir -p ~/Desktop && cp /usr/share/applications/dorowu-installer.desktop ~/Desktop/ && chmod +x ~/Desktop/dorowu-installer.desktop'
+Exec=/bin/sh -c 'mkdir -p ~/Desktop && cp /usr/share/applications/dorowu-installer.desktop ~/Desktop/ && cp /usr/share/applications/dorowu-ai.desktop ~/Desktop/ && cp /usr/share/applications/dorowu-updater.desktop ~/Desktop/ && chmod +x ~/Desktop/*.desktop'
 Hidden=false
 NoDisplay=true
 X-GNOME-Autostart-enabled=true

@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Dorowu OS Real Desktop Update Notifier & Dialog Popup
+# Periodically checks for updates and displays notification with Install / Cancel
+# ==============================================================================
+
+set -e
+
+# Wait for desktop session and network to settle
+sleep 15
+
+check_updates() {
+    ARCH_COUNT=0
+    FLATPAK_COUNT=0
+
+    # 1. Check Arch System Packages
+    if command -v checkupdates >/dev/null 2>&1; then
+        ARCH_OUT=$(checkupdates 2>/dev/null || true)
+        if [ -n "$ARCH_OUT" ]; then
+            ARCH_COUNT=$(echo "$ARCH_OUT" | wc -l)
+        fi
+    fi
+
+    # 2. Check Flatpak Desktop Apps
+    if command -v flatpak >/dev/null 2>&1; then
+        FLAT_OUT=$(flatpak remote-ls --updates 2>/dev/null || true)
+        if [ -n "$FLAT_OUT" ]; then
+            FLATPAK_COUNT=$(echo "$FLAT_OUT" | wc -l)
+        fi
+    fi
+
+    TOTAL=$((ARCH_COUNT + FLATPAK_COUNT))
+    echo "$TOTAL"
+}
+
+show_popup_prompt() {
+    TOTAL="$1"
+    TITLE="Dorowu OS Updates Available"
+    MSG="System & App Updates Available:\n• Arch Linux Core Packages: $ARCH_COUNT\n• Flatpak Desktop Apps: $FLATPAK_COUNT\n\nTotal: $TOTAL update(s) ready to install.\nWould you like to install them now?"
+
+    # Method 1: KDE Plasma Native kdialog popup with Install Updates & Cancel buttons
+    if [ -n "$DISPLAY" ] || [ -n "$WAYLAND_DISPLAY" ]; then
+        if command -v kdialog >/dev/null 2>&1; then
+            if kdialog --icon "dorowu-updater" \
+                       --title "$TITLE" \
+                       --yes-label "Install Updates" \
+                       --no-label "Cancel" \
+                       --yesno "$MSG"; then
+                # User clicked "Install Updates"
+                nohup /usr/local/bin/dorowu-updater-ui >/dev/null 2>&1 &
+                exit 0
+            else
+                # User clicked "Cancel"
+                exit 0
+            fi
+        fi
+
+        # Method 2: notify-send with action buttons
+        if command -v notify-send >/dev/null 2>&1; then
+            ACTION=$(notify-send -i dorowu-updater \
+                                 -a "Dorowu System Updates" \
+                                 "$TITLE" \
+                                 "$TOTAL update(s) available for system and applications." \
+                                 --action="install=Install Updates" \
+                                 --action="cancel=Cancel" 2>/dev/null || true)
+            if [ "$ACTION" = "install" ]; then
+                nohup /usr/local/bin/dorowu-updater-ui >/dev/null 2>&1 &
+                exit 0
+            else
+                exit 0
+            fi
+        fi
+
+        # Method 3: Python Tkinter native popup dialog fallback
+        python3 -c "
+import sys, subprocess
+try:
+    import tkinter as tk
+    from tkinter import messagebox
+    root = tk.Tk()
+    root.withdraw()
+    ans = messagebox.askyesno('$TITLE', 'Dorowu OS has $TOTAL updates available.\n\nInstall updates now?', icon='info')
+    if ans:
+        subprocess.Popen(['/usr/local/bin/dorowu-updater-ui'])
+except Exception:
+    pass
+" 2>/dev/null || true
+    fi
+}
+
+# Run loop: checks on startup and every 4 hours
+while true; do
+    TOTAL_UPDATES=$(check_updates)
+    if [ "$TOTAL_UPDATES" -gt 0 ]; then
+        show_popup_prompt "$TOTAL_UPDATES"
+    fi
+    # Sleep 4 hours before checking again
+    sleep 14400
+done
