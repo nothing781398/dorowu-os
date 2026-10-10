@@ -114,7 +114,6 @@ gvfs-smb
 discover
 packagekit-qt6
 archlinux-appstream-data
-plasma-discover-notifier
 flatpak
 fwupd
 pacman-contrib
